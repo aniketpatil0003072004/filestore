@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import { analyzeUrl, getPredefinedCategories, getCategoryEmoji } from './urlAnalyzer'
+import { storeToken, removeToken } from './indexedDBHelper'
 import SuccessToast from './components/SuccessToast'
 import './App.css'
 
@@ -49,6 +50,15 @@ function App() {
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
           console.log('Service Worker registered:', registration)
+
+          // Send Supabase config to Service Worker for background saves
+          if (registration.active) {
+            registration.active.postMessage({
+              type: 'SUPABASE_CONFIG',
+              url: import.meta.env.VITE_SUPABASE_URL,
+              key: import.meta.env.VITE_SUPABASE_ANON_KEY
+            })
+          }
         })
         .catch((error) => {
           console.log('Service Worker registration failed:', error)
@@ -98,9 +108,13 @@ function App() {
   useEffect(() => {
     if (sessionToken) {
       localStorage.setItem('video_vault_token', sessionToken)
+      // Also store in IndexedDB for Service Worker access
+      storeToken(sessionToken).catch(err => console.error('IndexedDB store error:', err))
       fetchItems()
     } else {
       localStorage.removeItem('video_vault_token')
+      // Also remove from IndexedDB
+      removeToken().catch(err => console.error('IndexedDB remove error:', err))
       setItems([])
     }
   }, [sessionToken])

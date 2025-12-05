@@ -144,6 +144,57 @@ const TECH_KEYWORDS = [
     'device'
 ]
 
+// News keywords
+const NEWS_KEYWORDS = [
+    'news',
+    'breaking',
+    'headline',
+    'report',
+    'journalist',
+    'press',
+    'media',
+    'current',
+    'events',
+    'update',
+    'live',
+    'coverage',
+    'briefing'
+]
+
+// News channels
+const NEWS_CHANNELS = [
+    'cnn',
+    'bbc',
+    'nbc',
+    'fox news',
+    'foxnews',
+    'msnbc',
+    'reuters',
+    'associated press',
+    'ap news',
+    'apnews',
+    'bloomberg',
+    'cnbc',
+    'sky news',
+    'skynews',
+    'al jazeera',
+    'aljazeera',
+    'the guardian',
+    'guardian',
+    'nyt',
+    'new york times',
+    'newyorktimes',
+    'washington post',
+    'washingtonpost',
+    'wsj',
+    'wall street journal',
+    'wallstreetjournal',
+    'abc news',
+    'abcnews',
+    'cbs news',
+    'cbsnews'
+]
+
 /**
  * Analyzes a URL and returns platform, content type, and suggested category
  * @param {string} url - The URL to analyze
@@ -226,6 +277,32 @@ export function analyzeUrl(url) {
                 confidence: 'high',
                 emoji: '🔧',
                 description: 'Tech video'
+            }
+        }
+
+        // Check for news content
+        const hasNewsChannel = NEWS_CHANNELS.some(channel => lowerUrl.includes(channel))
+        const hasNewsKeyword = NEWS_KEYWORDS.some(keyword => lowerUrl.includes(keyword))
+
+        if (hasNewsChannel) {
+            return {
+                platform: 'youtube',
+                contentType: 'news',
+                suggestedCategory: 'News',
+                confidence: 'high',
+                emoji: '📰',
+                description: 'News video'
+            }
+        }
+
+        if (hasNewsKeyword) {
+            return {
+                platform: 'youtube',
+                contentType: 'news',
+                suggestedCategory: 'News',
+                confidence: 'medium',
+                emoji: '📰',
+                description: 'News content'
             }
         }
 

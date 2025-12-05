@@ -1,54 +1,417 @@
-const CACHE_NAME = 'video-vault-v1';
+// Video Vault Service Worker with Background Save
+// Handles PWA caching, Share Target API, and silent background saves
+
+const CACHE_NAME = 'video-vault-v2'
+const DB_NAME = 'video-vault-db'
+const DB_VERSION = 1
+const SUPABASE_URL = 'https://your-project.supabase.co' // Will be replaced dynamically
+const SUPABASE_KEY = 'your-anon-key' // Will be replaced dynamically
+
 const urlsToCache = [
     '/',
     '/index.html',
     '/manifest.json',
     '/icon-192.png',
     '/icon-512.png'
-];
+]
 
-// Install service worker and cache assets
+// ========== INSTALL ==========
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => cache.addAll(urlsToCache))
-    );
-    self.skipWaiting();
-});
+    )
+    self.skipWaiting()
+})
 
-// Activate service worker and clean old caches
+// ========== ACTIVATE ==========
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
                     if (cacheName !== CACHE_NAME) {
-                        return caches.delete(cacheName);
+                        return caches.delete(cacheName)
                     }
                 })
-            );
+            )
         })
-    );
-    self.clients.claim();
-});
+    )
+    self.clients.claim()
+})
 
-// Fetch strategy: Network first, fallback to cache
+// ========== FETCH - Handle Share Target ==========
 self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url)
+
+    // Handle Share Target POST requests
+    if (url.pathname === '/' && event.request.method === 'POST') {
+        event.respondWith(handleShareTarget(event.request))
+        return
+    }
+
+    // Normal fetch handling: Network first, fallback to cache
     event.respondWith(
         fetch(event.request)
             .then((response) => {
-                // Clone the response
-                const responseToCache = response.clone();
-
+                const responseToCache = response.clone()
                 caches.open(CACHE_NAME)
                     .then((cache) => {
-                        cache.put(event.request, responseToCache);
-                    });
-
-                return response;
+                        cache.put(event.request, responseToCache)
+                    })
+                return response
             })
             .catch(() => {
-                return caches.match(event.request);
+                return caches.match(event.request)
             })
-    );
-});
+    )
+})
+
+// ========== SHARE TARGET HANDLER ==========
+async function handleShareTarget(request) {
+    try {
+        const formData = await request.formData()
+        const sharedUrl = formData.get('url') || formData.get('text') || formData.get('title')
+
+        if (!sharedUrl) {
+            return Response.redirect('/', 303)
+        }
+
+        // Get user token from IndexedDB
+        const token = await getTokenFromDB()
+
+        if (!token) {
+            // No token - redirect to app for login
+            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}`, 303)
+        }
+
+        // Analyze URL
+        const analysis = analyzeUrl(sharedUrl)
+
+        // Save in background
+        try {
+            await saveToDatabase(sharedUrl, analysis, token)
+
+            // Show success notification
+            self.registration.showNotification('Video Vault', {
+                body: `${analysis.emoji} Saved to ${analysis.suggestedCategory}!`,
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: 'video-vault-save',
+                requireInteraction: false
+            })
+
+            // Return empty response (don't open app)
+            return new Response(null, {
+                status: 200,
+                headers: { 'Content-Type': 'text/plain' }
+            })
+
+        } catch (error) {
+            console.error('Background save error:', error)
+
+            // Show error notification
+            self.registration.showNotification('Video Vault', {
+                body: '❌ Failed to save. Opening app...',
+                icon: '/icon-192.png',
+                tag: 'video-vault-error'
+            })
+
+            // Fallback: redirect to app
+            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}`, 303)
+        }
+
+    } catch (error) {
+        console.error('Share target error:', error)
+        return Response.redirect('/', 303)
+    }
+}
+
+// ========== INDEXEDDB - Get Token ==========
+function getTokenFromDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION)
+
+        request.onerror = () => resolve(null)
+
+        request.onsuccess = (event) => {
+            const db = event.target.result
+
+            if (!db.objectStoreNames.contains('auth')) {
+                resolve(null)
+                return
+            }
+
+            const transaction = db.transaction(['auth'], 'readonly')
+            const store = transaction.objectStore('auth')
+            const getRequest = store.get('user_token')
+
+            getRequest.onsuccess = () => resolve(getRequest.result || null)
+            getRequest.onerror = () => resolve(null)
+        }
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result
+            if (!db.objectStoreNames.contains('auth')) {
+                db.createObjectStore('auth')
+            }
+        }
+    })
+}
+
+// ========== SUPABASE - Save to Database ==========
+async function saveToDatabase(url, analysis, token) {
+    // Auto-generate title
+    const videoId = extractVideoId(url)
+    const title = videoId ? `Video ${videoId.substring(0, 8)}` : `Link ${Date.now()}`
+
+    const newItem = {
+        user_token: token,
+        type: 'video',
+        url: url,
+        title: title,
+        category: analysis.suggestedCategory || 'Videos',
+        notes: '',
+        image_url: null,
+        created_at: new Date().toISOString()
+    }
+
+    // Get Supabase credentials from cache or use defaults
+    const supabaseUrl = await getSupabaseUrl()
+    const supabaseKey = await getSupabaseKey()
+
+    const response = await fetch(`${supabaseUrl}/rest/v1/items`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(newItem)
+    })
+
+    if (!response.ok) {
+        throw new Error(`Supabase error: ${response.status}`)
+    }
+
+    return await response.json()
+}
+
+// ========== URL ANALYZER (Simplified for SW) ==========
+function analyzeUrl(url) {
+    if (!url) {
+        return {
+            platform: 'unknown',
+            contentType: 'unknown',
+            suggestedCategory: 'Videos',
+            confidence: 'low',
+            emoji: '🔗',
+            description: 'Video link'
+        }
+    }
+
+    const lowerUrl = url.toLowerCase()
+
+    // YouTube Music
+    if (lowerUrl.includes('music.youtube.com')) {
+        return {
+            platform: 'youtube',
+            contentType: 'music',
+            suggestedCategory: 'Music',
+            confidence: 'high',
+            emoji: '🎵',
+            description: 'YouTube Music'
+        }
+    }
+
+    // YouTube Shorts
+    if (lowerUrl.includes('/shorts/')) {
+        return {
+            platform: 'youtube',
+            contentType: 'short',
+            suggestedCategory: 'YouTube Shorts',
+            confidence: 'high',
+            emoji: '⚡',
+            description: 'YouTube Short'
+        }
+    }
+
+    // News detection
+    const newsChannels = ['cnn', 'bbc', 'nbc', 'foxnews', 'msnbc', 'reuters', 'bloomberg', 'cnbc']
+    const newsKeywords = ['news', 'breaking', 'headline', 'report']
+
+    if (newsChannels.some(ch => lowerUrl.includes(ch)) || newsKeywords.some(kw => lowerUrl.includes(kw))) {
+        return {
+            platform: 'youtube',
+            contentType: 'news',
+            suggestedCategory: 'News',
+            confidence: 'high',
+            emoji: '📰',
+            description: 'News video'
+        }
+    }
+
+    // Cooking detection
+    const cookingKeywords = ['recipe', 'cooking', 'food', 'chef', 'baking']
+    if (cookingKeywords.some(kw => lowerUrl.includes(kw))) {
+        return {
+            platform: 'youtube',
+            contentType: 'cooking',
+            suggestedCategory: 'Cooking',
+            confidence: 'high',
+            emoji: '🍳',
+            description: 'Cooking video'
+        }
+    }
+
+    // Fitness detection
+    const fitnessKeywords = ['workout', 'fitness', 'exercise', 'gym', 'yoga']
+    if (fitnessKeywords.some(kw => lowerUrl.includes(kw))) {
+        return {
+            platform: 'youtube',
+            contentType: 'fitness',
+            suggestedCategory: 'Fitness',
+            confidence: 'high',
+            emoji: '💪',
+            description: 'Fitness video'
+        }
+    }
+
+    // Tech detection
+    const techKeywords = ['tech', 'review', 'unboxing', 'coding', 'programming']
+    if (techKeywords.some(kw => lowerUrl.includes(kw))) {
+        return {
+            platform: 'youtube',
+            contentType: 'tech',
+            suggestedCategory: 'Tech & DIY',
+            confidence: 'high',
+            emoji: '🔧',
+            description: 'Tech video'
+        }
+    }
+
+    // Music detection
+    const musicKeywords = ['music', 'song', 'vevo', 'official', 'audio', 'lyrics']
+    if (musicKeywords.some(kw => lowerUrl.includes(kw))) {
+        return {
+            platform: 'youtube',
+            contentType: 'music',
+            suggestedCategory: 'Music',
+            confidence: 'high',
+            emoji: '🎵',
+            description: 'Music video'
+        }
+    }
+
+    // Education detection
+    const eduChannels = ['khanacademy', 'crashcourse', 'tedx', 'coursera', 'udemy']
+    const eduKeywords = ['tutorial', 'lesson', 'course', 'learn', 'education']
+
+    if (eduChannels.some(ch => lowerUrl.includes(ch)) || eduKeywords.some(kw => lowerUrl.includes(kw))) {
+        return {
+            platform: 'youtube',
+            contentType: 'education',
+            suggestedCategory: 'Education',
+            confidence: 'high',
+            emoji: '📚',
+            description: 'Educational content'
+        }
+    }
+
+    // Instagram Reels
+    if (lowerUrl.includes('instagram.com/reel/')) {
+        return {
+            platform: 'instagram',
+            contentType: 'reel',
+            suggestedCategory: 'Instagram Reels',
+            confidence: 'high',
+            emoji: '🎬',
+            description: 'Instagram Reel'
+        }
+    }
+
+    // Instagram Posts
+    if (lowerUrl.includes('instagram.com/p/')) {
+        return {
+            platform: 'instagram',
+            contentType: 'post',
+            suggestedCategory: 'Instagram Posts',
+            confidence: 'high',
+            emoji: '📸',
+            description: 'Instagram Post'
+        }
+    }
+
+    // TikTok
+    if (lowerUrl.includes('tiktok.com')) {
+        return {
+            platform: 'tiktok',
+            contentType: 'video',
+            suggestedCategory: 'TikTok',
+            confidence: 'high',
+            emoji: '🎵',
+            description: 'TikTok video'
+        }
+    }
+
+    // Default
+    return {
+        platform: 'youtube',
+        contentType: 'video',
+        suggestedCategory: 'YouTube Videos',
+        confidence: 'medium',
+        emoji: '🎥',
+        description: 'YouTube video'
+    }
+}
+
+// ========== EXTRACT VIDEO ID ==========
+function extractVideoId(url) {
+    try {
+        if (!url) return null
+
+        // YouTube patterns
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            if (url.includes('v=')) {
+                return url.split('v=')[1]?.split('&')[0]
+            }
+            if (url.includes('youtu.be/')) {
+                return url.split('youtu.be/')[1]?.split('?')[0]
+            }
+        }
+
+        // Instagram patterns
+        if (url.includes('instagram.com')) {
+            const match = url.match(/\/(reel|p)\/([^\/\?]+)/)
+            if (match) return match[2]
+        }
+    } catch (e) {
+        console.error('Error extracting video ID', e)
+    }
+    return null
+}
+
+// ========== GET SUPABASE CONFIG ==========
+async function getSupabaseUrl() {
+    // Try to get from cache or use environment
+    return SUPABASE_URL !== 'https://your-project.supabase.co'
+        ? SUPABASE_URL
+        : 'https://your-project.supabase.co' // Replace with actual URL
+}
+
+async function getSupabaseKey() {
+    // Try to get from cache or use environment
+    return SUPABASE_KEY !== 'your-anon-key'
+        ? SUPABASE_KEY
+        : 'your-anon-key' // Replace with actual key
+}
+
+// ========== MESSAGE HANDLER ==========
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SUPABASE_CONFIG') {
+        // Store Supabase config when sent from main app
+        self.SUPABASE_URL = event.data.url
+        self.SUPABASE_KEY = event.data.key
+    }
+})
