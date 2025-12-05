@@ -132,12 +132,17 @@ async function scrapeYouTubeMetadata(url) {
         const thumbMatch = html.match(/<meta property="og:image" content="([^"]+)"/)
         const channelMatch = html.match(/<link itemprop="name" content="([^"]+)"/)
 
+        // Extract Duration (ISO 8601 format: PT1H30M)
+        const durationMatch = html.match(/<meta itemprop="duration" content="([^"]+)"/)
+        const durationInMinutes = durationMatch ? parseDuration(durationMatch[1]) : 0
+
         return {
             title: titleMatch?.[1] || 'YouTube Video',
             channelName: channelMatch?.[1] || 'Unknown Channel',
             creatorProfile: '',
             thumbnail: thumbMatch?.[1] || '',
             description: descMatch?.[1] || '',
+            duration: durationInMinutes, // Added duration
             platform: 'youtube',
             success: true
         }
@@ -151,9 +156,28 @@ async function scrapeYouTubeMetadata(url) {
             creatorProfile: '',
             thumbnail: '',
             description: '',
+            duration: 0,
             platform: 'youtube',
             success: false
         }
+    }
+}
+
+/**
+ * Helper: Parse ISO 8601 duration (PT1H30M) to minutes
+ */
+function parseDuration(duration) {
+    try {
+        const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/)
+        if (!match) return 0
+
+        const hours = (parseInt(match[1]) || 0)
+        const minutes = (parseInt(match[2]) || 0)
+        // We ignore seconds for the "Movie" check (usually > 60 mins)
+
+        return (hours * 60) + minutes
+    } catch (e) {
+        return 0
     }
 }
 

@@ -172,6 +172,36 @@ export function detectInstagramReelType(title, description = '') {
 }
 
 /**
+ * Detect Language (English vs Hindi)
+ */
+export function detectLanguage(title, description = '') {
+    const text = `${title} ${description}`.toLowerCase()
+
+    // Check for Devanagari script (Strongest signal for Hindi)
+    if (/[\u0900-\u097F]/.test(text)) return 'Hindi'
+
+    // Hindi Keywords
+    const hindiKeywords = [
+        'hindi', 'bollywood', 't-series', 'zee', 'desi', 'punjabi',
+        'india', 'saregama', 'tips official', 'yyrf', 'badshah', 'arijit',
+        'kapil sharma', 'taarak mehta', 'bhajan', 'aarti', 'mantra'
+    ]
+    if (hindiKeywords.some(kw => text.includes(kw))) return 'Hindi'
+
+    // English Keywords (Common words)
+    const englishKeywords = [
+        'how to', 'tutorial', 'review', 'unboxing', 'official video',
+        'trailer', 'teaser', 'movie', 'scene', 'best of', 'funny',
+        'comedy', 'vlog', 'gameplay', 'walkthrough', 'highlights',
+        'english', 'hollywood', 'marvel', 'dc', 'netflix'
+    ]
+    if (englishKeywords.some(kw => text.includes(kw))) return 'English'
+
+    // Default to English if no strong Hindi signal (most web content is English)
+    return 'English'
+}
+
+/**
  * Main function: Analyze content with metadata
  * ENFORCES STRICT PLATFORM SEPARATION
  */
@@ -179,8 +209,11 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     const title = metadata?.title || ''
     const description = metadata?.description || ''
     const channelName = metadata?.channelName || ''
+    const duration = metadata?.duration || 0 // In minutes
     const platform = metadata?.platform === 'youtube' ? 'YouTube' :
         metadata?.platform === 'instagram' ? 'Instagram' : 'Other'
+
+    const language = detectLanguage(title, description)
 
     // ==========================================
     // YOUTUBE STRICT CATEGORIZATION
@@ -188,7 +221,6 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     if (platform === 'YouTube') {
         // 0. YouTube Shorts (Strict Check)
         if (url.includes('/shorts/')) {
-            // Check for sports in shorts
             const sportsDetection = detectSportsContent(title, description)
             if (sportsDetection) {
                 return {
@@ -204,8 +236,23 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
             }
         }
 
-        // 1. Sports (Including Cricket)
-        // User explicitly asked for "Youtube Sports"
+        // 1. YouTube Movies (Duration > 60 mins)
+        if (duration > 60) {
+            if (language === 'English') {
+                return {
+                    fullCategory: 'English Movies',
+                    subcategory: 'YouTube',
+                    emoji: '🎬'
+                }
+            }
+            return {
+                fullCategory: 'YouTube Movies',
+                subcategory: language, // e.g., Hindi
+                emoji: '🎥'
+            }
+        }
+
+        // 2. Sports (Including Cricket)
         const sportsDetection = detectSportsContent(title, description)
         if (sportsDetection) {
             return {
@@ -215,17 +262,17 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
             }
         }
 
-        // 2. Music (Hindi vs English)
+        // 3. Music (Hindi vs English)
         const musicDetection = detectMusicGenre(title, description, channelName)
         if (musicDetection) {
             return {
-                fullCategory: `YouTube Music - ${musicDetection.subcategory}`, // "YouTube Music - Hindi"
+                fullCategory: `YouTube Music - ${musicDetection.subcategory}`,
                 subcategory: musicDetection.subcategory,
                 emoji: '🎵'
             }
         }
 
-        // 3. News
+        // 4. News
         const newsDetection = detectNewsType(title, description)
         if (newsDetection) {
             return {
@@ -235,7 +282,7 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
             }
         }
 
-        // 4. Tech
+        // 5. Tech
         const techKeywords = ['tech', 'review', 'unboxing', 'phone', 'laptop', 'gadget']
         if (techKeywords.some(kw => `${title} ${description}`.toLowerCase().includes(kw))) {
             return {
@@ -245,7 +292,16 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
             }
         }
 
-        // 5. Default YouTube
+        // 6. Language Based Categorization (YouTube English vs YouTube Hindi)
+        if (language === 'English') {
+            return {
+                fullCategory: 'YouTube English',
+                subcategory: 'General',
+                emoji: '🇺🇸'
+            }
+        }
+
+        // 7. Default YouTube
         return {
             fullCategory: 'YouTube Videos',
             subcategory: null,
@@ -261,12 +317,21 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
         if (url.includes('/reel/')) {
             const reelDetection = detectInstagramReelType(title, description)
 
-            // Special case for Sports as requested
+            // Special case for Sports
             if (reelDetection && reelDetection.subcategory === 'Sports') {
                 return {
                     fullCategory: 'Instagram Sports',
                     subcategory: 'Reels',
                     emoji: '🏅'
+                }
+            }
+
+            // Language Check for Instagram
+            if (language === 'English') {
+                return {
+                    fullCategory: 'Instagram English',
+                    subcategory: 'Reels',
+                    emoji: '🇺🇸'
                 }
             }
 
@@ -307,6 +372,10 @@ export function getAllCategories() {
     return [
         { name: 'YouTube Sports', emoji: '🏅' },
         { name: 'Instagram Sports', emoji: '🏅' },
+        { name: 'English Movies', emoji: '🎬' },
+        { name: 'YouTube Movies', emoji: '🎥' },
+        { name: 'YouTube English', emoji: '🇺🇸' },
+        { name: 'Instagram English', emoji: '🇺🇸' },
         { name: 'YouTube Music - Hindi', emoji: '🎵' },
         { name: 'YouTube Music - English', emoji: '🎵' },
         { name: 'YouTube News', emoji: '📰' },
