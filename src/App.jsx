@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import './App.css'
@@ -22,6 +22,55 @@ function App() {
   })
   const [selectedFile, setSelectedFile] = useState(null)
 
+  // Ref for auto-focus
+  const urlInputRef = useRef(null)
+
+  // PWA Install Prompt
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [showInstallButton, setShowInstallButton] = useState(false)
+
+  // Register Service Worker for PWA
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('Service Worker registered:', registration)
+        })
+        .catch((error) => {
+          console.log('Service Worker registration failed:', error)
+        })
+    }
+
+    // Listen for install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setShowInstallButton(true)
+    })
+  }, [])
+
+  // Handle Share Target API - Check URL params for shared content
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const sharedUrl = urlParams.get('url') || urlParams.get('text')
+    const sharedTitle = urlParams.get('title')
+
+    if (sharedUrl && sessionToken) {
+      // Pre-fill form with shared URL
+      setFormData({
+        url: sharedUrl,
+        title: sharedTitle || '',
+        category: '',
+        notes: ''
+      })
+      setItemType('video')
+      setIsModalOpen(true)
+
+      // Clean URL params
+      window.history.replaceState({}, '', '/')
+    }
+  }, [sessionToken])
+
   // Persist token
   useEffect(() => {
     if (sessionToken) {
@@ -32,6 +81,13 @@ function App() {
       setItems([])
     }
   }, [sessionToken])
+
+  // Auto-focus URL input when modal opens
+  useEffect(() => {
+    if (isModalOpen && itemType === 'video' && urlInputRef.current) {
+      setTimeout(() => urlInputRef.current?.focus(), 100)
+    }
+  }, [isModalOpen, itemType])
 
   const fetchItems = async () => {
     if (!sessionToken) return
@@ -54,11 +110,47 @@ function App() {
 
   const categories = ['All', ...new Set(items.map(i => i.category).filter(Boolean))]
 
+  // Extract video ID from YouTube or Instagram URL
+  const extractVideoId = (url) => {
+    try {
+      if (!url) return null
+
+      // YouTube patterns
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        // https://www.youtube.com/watch?v=VIDEO_ID
+        if (url.includes('v=')) {
+          return url.split('v=')[1]?.split('&')[0]
+        }
+        // https://youtu.be/VIDEO_ID
+        if (url.includes('youtu.be/')) {
+          return url.split('youtu.be/')[1]?.split('?')[0]
+        }
+        // https://www.youtube.com/embed/VIDEO_ID
+        if (url.includes('embed/')) {
+          return url.split('embed/')[1]?.split('?')[0]
+        }
+      }
+
+      // Instagram patterns
+      if (url.includes('instagram.com')) {
+        // https://www.instagram.com/reel/VIDEO_ID/
+        // https://www.instagram.com/p/VIDEO_ID/
+        const match = url.match(/\/(reel|p)\/([^\/\?]+)/)
+        if (match) return match[2]
+      }
+    } catch (e) {
+      console.error('Error extracting video ID', e)
+    }
+    return null
+  }
+
   const getThumbnail = (url) => {
     try {
       if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
-        const videoId = url.split('v=')[1]?.split('&')[0] || url.split('/').pop()
-        return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+        const videoId = extractVideoId(url)
+        if (videoId) {
+          return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+        }
       }
     } catch (e) {
       console.error('Error parsing URL', e)
@@ -98,10 +190,22 @@ function App() {
         imageUrl = publicUrl
       }
 
+      // Auto-generate title if empty
+      let finalTitle = formData.title
+      if (!finalTitle || finalTitle.trim() === '') {
+        if (itemType === 'video') {
+          const videoId = extractVideoId(formData.url)
+          finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Untitled Video'
+        } else {
+          finalTitle = `Note ${new Date().toLocaleDateString()}`
+        }
+      }
+
       const newItem = {
         user_token: sessionToken, // Link to our token
         type: itemType,
         ...formData,
+        title: finalTitle,
         image_url: imageUrl,
         created_at: new Date().toISOString()
       }
@@ -144,6 +248,20 @@ function App() {
     setSessionToken(null)
   }
 
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return
+
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt')
+    }
+
+    setDeferredPrompt(null)
+    setShowInstallButton(false)
+  }
+
   const filteredItems = activeCategory === 'All'
     ? items
     : items.filter(i => i.category === activeCategory)
@@ -157,6 +275,15 @@ function App() {
       <header className="header">
         <h1 className="title">Video Vault</h1>
         <div style={{ display: 'flex', gap: '1rem' }}>
+          {showInstallButton && (
+            <button
+              className="add-btn"
+              onClick={handleInstallClick}
+              style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+            >
+              📱 Install App
+            </button>
+          )}
           <button className="add-btn" onClick={() => setIsModalOpen(true)}>
             + Add Item
           </button>
@@ -278,40 +405,109 @@ function App() {
               {itemType === 'video' && (
                 <div className="form-group">
                   <label className="form-label">Video URL</label>
-                  <input
-                    className="form-input"
-                    type="url"
-                    required={itemType === 'video'}
-                    placeholder="https://youtube.com/..."
-                    value={formData.url}
-                    onChange={e => setFormData({ ...formData, url: e.target.value })}
-                  />
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      ref={urlInputRef}
+                      className="form-input"
+                      type="url"
+                      required={itemType === 'video'}
+                      placeholder="https://youtube.com/... or https://instagram.com/..."
+                      value={formData.url}
+                      onChange={e => setFormData({ ...formData, url: e.target.value })}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="add-btn"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText()
+                          if (text) {
+                            setFormData({ ...formData, url: text })
+                          }
+                        } catch (err) {
+                          alert('Failed to read clipboard. Please paste manually.')
+                        }
+                      }}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        whiteSpace: 'nowrap',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      📋 Paste
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="form-group">
-                <label className="form-label">Title</label>
+                <label className="form-label">Title (Optional)</label>
                 <input
                   className="form-input"
                   type="text"
-                  required
-                  placeholder={itemType === 'video' ? "My Germany Trip" : "Trip Itinerary"}
+                  placeholder={itemType === 'video' ? "Auto-generated if left empty" : "My Note Title"}
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Category</label>
+
+                {/* Show existing categories as clickable pills */}
+                {categories.filter(c => c !== 'All').length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                    marginBottom: '0.75rem'
+                  }}>
+                    {categories.filter(c => c !== 'All').map(cat => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, category: cat })}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          borderRadius: '20px',
+                          border: formData.category === cat
+                            ? '2px solid var(--accent-primary)'
+                            : '1px solid var(--border-color)',
+                          background: formData.category === cat
+                            ? 'var(--accent-primary)'
+                            : 'var(--bg-secondary)',
+                          color: formData.category === cat
+                            ? 'white'
+                            : 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem',
+                          fontWeight: formData.category === cat ? '600' : '400',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => {
+                          if (formData.category !== cat) {
+                            e.target.style.borderColor = 'var(--accent-primary)'
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (formData.category !== cat) {
+                            e.target.style.borderColor = 'var(--border-color)'
+                          }
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Input for new category or custom entry */}
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="Travel, Music, Coding..."
-                  list="category-suggestions"
+                  placeholder="Or type a new category..."
                   value={formData.category}
                   onChange={e => setFormData({ ...formData, category: e.target.value })}
                 />
-                <datalist id="category-suggestions">
-                  {categories.filter(c => c !== 'All').map(c => <option key={c} value={c} />)}
-                </datalist>
               </div>
               <div className="form-group">
                 <label className="form-label">{itemType === 'video' ? 'Notes (Optional)' : 'Content'}</label>
