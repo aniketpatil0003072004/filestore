@@ -221,105 +221,28 @@ export function detectLanguage(title, description = '') {
 
 /**
  * Main function: Analyze content with metadata
- * ENFORCES STRICT PLATFORM SEPARATION
+ * SIMPLIFIED: 4 Main Buckets Only
  */
 export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     const title = metadata?.title || ''
     const description = metadata?.description || ''
     const channelName = metadata?.channelName || ''
-    const duration = metadata?.duration || 0 // In minutes
+
     const platform = metadata?.platform === 'youtube' ? 'YouTube' :
         metadata?.platform === 'instagram' ? 'Instagram' : 'Other'
 
-    const language = detectLanguage(title, description)
+    // ==========================================
+    // SIMPLIFIED CATEGORIZATION (4 Buckets Only)
+    // ==========================================
 
-    // ==========================================
-    // YOUTUBE STRICT CATEGORIZATION
-    // ==========================================
     if (platform === 'YouTube') {
-        // 0. YouTube Shorts (Strict Check)
         if (url.includes('/shorts/')) {
-            const sportsDetection = detectSportsContent(title, description)
-            if (sportsDetection) {
-                return {
-                    fullCategory: 'YouTube Sports',
-                    subcategory: 'Shorts',
-                    emoji: '🏅'
-                }
-            }
             return {
                 fullCategory: 'YouTube Shorts',
                 subcategory: null,
                 emoji: '⚡'
             }
         }
-
-        // 1. YouTube Movies (Duration > 60 mins)
-        if (duration > 60) {
-            if (language === 'English') {
-                return {
-                    fullCategory: 'English Movies',
-                    subcategory: 'YouTube',
-                    emoji: '🎬'
-                }
-            }
-            return {
-                fullCategory: 'YouTube Movies',
-                subcategory: language, // e.g., Hindi
-                emoji: '🎥'
-            }
-        }
-
-        // 2. Sports (Including Cricket)
-        const sportsDetection = detectSportsContent(title, description)
-        if (sportsDetection) {
-            return {
-                fullCategory: 'YouTube Sports',
-                subcategory: sportsDetection.subcategory,
-                emoji: '🏅'
-            }
-        }
-
-        // 3. Music (Hindi vs English)
-        const musicDetection = detectMusicGenre(title, description, channelName)
-        if (musicDetection) {
-            return {
-                fullCategory: `YouTube Music - ${musicDetection.subcategory}`,
-                subcategory: musicDetection.subcategory,
-                emoji: '🎵'
-            }
-        }
-
-        // 4. News
-        const newsDetection = detectNewsType(title, description)
-        if (newsDetection) {
-            return {
-                fullCategory: 'YouTube News',
-                subcategory: 'General',
-                emoji: '📰'
-            }
-        }
-
-        // 5. Tech
-        const techKeywords = ['tech', 'review', 'unboxing', 'phone', 'laptop', 'gadget']
-        if (techKeywords.some(kw => `${title} ${description}`.toLowerCase().includes(kw))) {
-            return {
-                fullCategory: 'YouTube Tech',
-                subcategory: 'Tech',
-                emoji: '🔧'
-            }
-        }
-
-        // 6. Language Based Categorization (YouTube English vs YouTube Hindi)
-        if (language === 'English') {
-            return {
-                fullCategory: 'YouTube English',
-                subcategory: 'General',
-                emoji: '🇺🇸'
-            }
-        }
-
-        // 7. Default YouTube
         return {
             fullCategory: 'YouTube Videos',
             subcategory: null,
@@ -327,47 +250,14 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
         }
     }
 
-    // ==========================================
-    // INSTAGRAM STRICT CATEGORIZATION
-    // ==========================================
     if (platform === 'Instagram') {
-        // Reels
         if (url.includes('/reel/')) {
-            const reelDetection = detectInstagramReelType(title, description)
-
-            // Special case for Sports
-            if (reelDetection && reelDetection.subcategory === 'Sports') {
-                return {
-                    fullCategory: 'Instagram Sports',
-                    subcategory: 'Reels',
-                    emoji: '🏅'
-                }
-            }
-
-            // Language Check for Instagram
-            if (language === 'English') {
-                return {
-                    fullCategory: 'Instagram English',
-                    subcategory: 'Reels',
-                    emoji: '🇺🇸'
-                }
-            }
-
-            if (reelDetection) {
-                return {
-                    fullCategory: `Instagram Reels - ${reelDetection.subcategory}`,
-                    subcategory: reelDetection.subcategory,
-                    emoji: '🎬'
-                }
-            }
             return {
                 fullCategory: 'Instagram Reels',
                 subcategory: null,
                 emoji: '🎬'
             }
         }
-
-        // Posts
         return {
             fullCategory: 'Instagram Posts',
             subcategory: null,
@@ -388,17 +278,8 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
  */
 export function getAllCategories() {
     return [
-        { name: 'YouTube Sports', emoji: '🏅' },
-        { name: 'Instagram Sports', emoji: '🏅' },
-        { name: 'English Movies', emoji: '🎬' },
-        { name: 'YouTube Movies', emoji: '🎥' },
-        { name: 'YouTube English', emoji: '🇺🇸' },
-        { name: 'Instagram English', emoji: '🇺🇸' },
-        { name: 'YouTube Music - Hindi', emoji: '🎵' },
-        { name: 'YouTube Music - English', emoji: '🎵' },
-        { name: 'YouTube News', emoji: '📰' },
-        { name: 'YouTube Tech', emoji: '🔧' },
         { name: 'YouTube Videos', emoji: '🎥' },
+        { name: 'YouTube Shorts', emoji: '⚡' },
         { name: 'Instagram Reels', emoji: '🎬' },
         { name: 'Instagram Posts', emoji: '📸' }
     ]

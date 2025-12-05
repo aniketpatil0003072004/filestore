@@ -224,10 +224,8 @@ function App() {
         image_url: metadata?.thumbnail || null,
         channel_name: metadata?.channelName || null,
         creator_profile: metadata?.creatorProfile || null,
-        subcategory: contentAnalysis?.subcategory || null,
         content_description: metadata?.description || null,
         thumbnail_url: metadata?.thumbnail || null,
-        platform_category: metadata?.platform || null,
         metadata: metadata || null,
         created_at: new Date().toISOString()
       }
@@ -328,10 +326,8 @@ function App() {
         image_url: imageUrl || enrichedMetadata?.thumbnail || null,
         channel_name: enrichedMetadata?.channelName || null,
         creator_profile: enrichedMetadata?.creatorProfile || null,
-        subcategory: enrichedMetadata?.subcategory || null, // Will be filled by backend logic or we can add it here if we had it in state
         content_description: enrichedMetadata?.description || null,
         thumbnail_url: enrichedMetadata?.thumbnail || null,
-        platform_category: enrichedMetadata?.platform || null,
         metadata: enrichedMetadata || null,
         created_at: new Date().toISOString()
       }
@@ -494,17 +490,7 @@ function App() {
                 <div className="thumbnail-badges">
                   <div className="badge-group-left">
                     <span className="video-category-badge">{item.category || 'Uncategorized'}</span>
-                    {item.subcategory && (
-                      <span className="subcategory-badge-overlay">
-                        {item.subcategory}
-                      </span>
-                    )}
                   </div>
-                  {item.platform_category && (
-                    <span className="platform-badge-overlay">
-                      {item.platform_category === 'youtube' ? '▶️' : item.platform_category === 'instagram' ? '📸' : ''}
-                    </span>
-                  )}
                 </div>
 
                 {item.type === 'video' && (
@@ -530,13 +516,15 @@ function App() {
                 </h3>
 
                 {item.channel_name && (
-                  <div className="creator-info">
+                  <div className="creator-info" style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     {item.creator_profile ? (
-                      <a href={item.creator_profile} target="_blank" rel="noopener noreferrer" className="channel-link">
-                        📺 {item.channel_name}
+                      <a href={item.creator_profile} target="_blank" rel="noopener noreferrer" className="channel-link" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'inherit', textDecoration: 'none' }}>
+                        <span style={{ opacity: 0.8 }}>By:</span> <strong>{item.channel_name}</strong>
                       </a>
                     ) : (
-                      <span>📺 {item.channel_name}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <span style={{ opacity: 0.8 }}>By:</span> <strong>{item.channel_name}</strong>
+                      </span>
                     )}
                   </div>
                 )}
@@ -559,6 +547,32 @@ function App() {
           ))}
         </div>
       )}
+
+      <footer style={{
+        textAlign: 'center',
+        padding: '2rem 0',
+        marginTop: 'auto',
+        color: 'var(--text-secondary)',
+        fontSize: '0.875rem',
+        opacity: 0.8
+      }}>
+        <div style={{
+          display: 'inline-block',
+          padding: '0.5rem 1rem',
+          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))',
+          borderRadius: '20px',
+          border: '1px solid rgba(99, 102, 241, 0.2)',
+          backdropFilter: 'blur(5px)'
+        }}>
+          <span style={{ marginRight: '0.25rem' }}>🚀</span>
+          Developed by <strong style={{
+            background: 'linear-gradient(to right, var(--accent-primary), var(--accent-secondary))',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontWeight: '800'
+          }}>Aniket Patil</strong>
+        </div>
+      </footer>
 
       {isModalOpen && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
@@ -936,18 +950,21 @@ function App() {
             </form>
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* Success Toast Notification */}
-      {showToast && (
-        <SuccessToast
-          message={toastMessage}
-          emoji={toastEmoji}
-          onClose={() => setShowToast(false)}
-          duration={3000}
-        />
-      )}
-    </div>
+      {
+        showToast && (
+          <SuccessToast
+            message={toastMessage}
+            emoji={toastEmoji}
+            onClose={() => setShowToast(false)}
+            duration={3000}
+          />
+        )
+      }
+    </div >
   )
 }
 

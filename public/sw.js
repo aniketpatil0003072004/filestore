@@ -71,122 +71,71 @@ self.addEventListener('fetch', (event) => {
 
 // ========== SHARE TARGET HANDLER ==========
 // ========== SHARE TARGET HANDLER ==========
+// ========== SHARE TARGET HANDLER ==========
 async function handleShareTarget(request) {
     try {
         const formData = await request.formData()
         const sharedUrl = formData.get('url') || formData.get('text') || formData.get('title')
-        const sharedText = formData.get('text') || ''
-        const sharedTitle = formData.get('title') || ''
-
-        // Combine text and title to look for user commands
-        // Remove the URL from the text to avoid false positives
-        const userText = `${sharedText} ${sharedTitle}`.replace(sharedUrl, '').toLowerCase()
 
         if (!sharedUrl) {
             return Response.redirect('/', 303)
         }
 
-        // Check for explicit user commands (e.g. "news", "movie kannada")
-        const commandCategory = detectUserCommandCategory(userText)
+        // Get user token from IndexedDB
+        const token = await getTokenFromDB()
 
-        if (commandCategory) {
-            // COMMAND DETECTED: Silent Background Save
-            const token = await getTokenFromDB()
+        if (!token) {
+            // No token - redirect to app for login
+            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}`, 303)
+        }
 
-            if (!token) {
-                // No token - redirect to app for login
-                return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}&manual=true`, 303)
-            }
+        // Analyze URL
+        const analysis = analyzeUrl(sharedUrl)
 
-            // Analyze URL (basic)
-            const analysis = analyzeUrl(sharedUrl)
+        // Save in background
+        try {
+            // Fetch metadata
+            const metadata = await enrichMetadata(sharedUrl)
 
-            // Save in background
-            try {
-                // Fetch metadata
-                const metadata = await enrichMetadata(sharedUrl)
+            // Analyze content (Simplified 4-bucket logic)
+            const contentAnalysis = analyzeContentWithMetadata(sharedUrl, metadata, analysis)
 
-                // Construct content analysis from command
-                const contentAnalysis = {
-                    fullCategory: commandCategory.category,
-                    subcategory: commandCategory.subcategory
-                }
+            await saveToDatabase(sharedUrl, analysis, token, metadata, contentAnalysis)
 
-                await saveToDatabase(sharedUrl, analysis, token, metadata, contentAnalysis)
+            // Show success notification
+            const categoryName = contentAnalysis?.fullCategory || analysis.suggestedCategory
+            const title = metadata?.title || 'Saved Link'
+            const channel = metadata?.channelName ? `By: ${metadata.channelName}` : ''
 
-                // Show success notification
-                const categoryName = commandCategory.category
-                const title = metadata?.title || 'Saved Link'
+            self.registration.showNotification('Video Vault', {
+                body: `${analysis.emoji} Saved to ${categoryName}!\n${title}\n${channel}`,
+                icon: metadata?.thumbnail || '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: 'video-vault-save',
+                requireInteraction: false
+            })
 
-                self.registration.showNotification('Video Vault', {
-                    body: `${commandCategory.emoji || '✅'} Saved to ${categoryName}!\n${title}`,
-                    icon: metadata?.thumbnail || '/icon-192.png',
-                    badge: '/icon-192.png',
-                    tag: 'video-vault-save',
-                    requireInteraction: false
-                })
+            // Redirect to saved.html which auto-closes
+            return Response.redirect('/saved.html', 303)
 
-                // Redirect to saved.html which auto-closes
-                return Response.redirect('/saved.html', 303)
+        } catch (error) {
+            console.error('Background save error:', error)
 
-            } catch (error) {
-                console.error('Background save error:', error)
-                // Fallback: redirect to app
-                return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}&manual=true`, 303)
-            }
-        } else {
-            // NO COMMAND: Redirect to App for Manual Selection
-            // The user wants to be asked if they didn't specify a section
-            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}&manual=true`, 303)
+            // Show error notification
+            self.registration.showNotification('Video Vault', {
+                body: '❌ Failed to save. Opening app...',
+                icon: '/icon-192.png',
+                tag: 'video-vault-error'
+            })
+
+            // Fallback: redirect to app
+            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}`, 303)
         }
 
     } catch (error) {
         console.error('Share target error:', error)
         return Response.redirect('/', 303)
     }
-}
-
-// ========== USER COMMAND DETECTOR ==========
-function detectUserCommandCategory(text) {
-    if (!text) return null
-    const lowerText = text.toLowerCase()
-
-    // 1. News
-    if (lowerText.includes('news')) {
-        return { category: 'YouTube News', subcategory: 'General', emoji: '📰' }
-    }
-
-    // 2. Movies
-    if (lowerText.includes('movie')) {
-        // Language detection for movies
-        if (lowerText.includes('kannada')) return { category: 'YouTube Movies', subcategory: 'Kannada', emoji: '🎥' }
-        if (lowerText.includes('hindi')) return { category: 'YouTube Movies', subcategory: 'Hindi', emoji: '🎥' }
-        if (lowerText.includes('tamil')) return { category: 'YouTube Movies', subcategory: 'Tamil', emoji: '🎥' }
-        if (lowerText.includes('telugu')) return { category: 'YouTube Movies', subcategory: 'Telugu', emoji: '🎥' }
-        if (lowerText.includes('malayalam')) return { category: 'YouTube Movies', subcategory: 'Malayalam', emoji: '🎥' }
-        if (lowerText.includes('english')) return { category: 'English Movies', subcategory: 'YouTube', emoji: '🎬' }
-
-        return { category: 'YouTube Movies', subcategory: 'General', emoji: '🎥' }
-    }
-
-    // 3. Music / Songs
-    if (lowerText.includes('song') || lowerText.includes('music')) {
-        if (lowerText.includes('hindi')) return { category: 'YouTube Music - Hindi', subcategory: 'Hindi', emoji: '🎵' }
-        if (lowerText.includes('english')) return { category: 'YouTube Music - English', subcategory: 'English', emoji: '🎵' }
-        return { category: 'YouTube Music - Hindi', subcategory: 'Hindi', emoji: '🎵' } // Default to Hindi as per user preference likely
-    }
-
-    // 4. Tech
-    if (lowerText.includes('tech') || lowerText.includes('review')) {
-        return { category: 'YouTube Tech', subcategory: 'Tech', emoji: '🔧' }
-    }
-
-    // 5. Cricket
-    if (lowerText.includes('cricket') || lowerText.includes('ipl') || lowerText.includes('match')) {
-        return { category: 'YouTube Sports', subcategory: 'Cricket', emoji: '🏏' }
-    }
-
-    return null
 }
 
 
@@ -241,10 +190,8 @@ async function saveToDatabase(url, analysis, token, metadata, contentAnalysis) {
         image_url: metadata?.thumbnail || null,
         channel_name: metadata?.channelName || null,
         creator_profile: metadata?.creatorProfile || null,
-        subcategory: contentAnalysis?.subcategory || null,
         content_description: metadata?.description || null,
         thumbnail_url: metadata?.thumbnail || null,
-        platform_category: metadata?.platform || null,
         metadata: metadata || null,
         created_at: new Date().toISOString()
     }
@@ -580,122 +527,54 @@ async function scrapeInstagramMetadata(url) {
 }
 
 // ========== CONTENT ANALYZER (Inlined for SW) ==========
+// ========== CONTENT ANALYZER (Inlined for SW) ==========
 function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     const title = metadata?.title || ''
     const description = metadata?.description || ''
     const channelName = metadata?.channelName || ''
-    const text = `${title} ${description} ${channelName}`.toLowerCase()
 
+    // Platform detection
     const platform = metadata?.platform === 'youtube' ? 'YouTube' :
         metadata?.platform === 'instagram' ? 'Instagram' : 'Other'
 
     // ==========================================
-    // YOUTUBE STRICT CATEGORIZATION
+    // SIMPLIFIED CATEGORIZATION (4 Buckets Only)
     // ==========================================
+
     if (platform === 'YouTube') {
-        // 0. YouTube Shorts (Strict Check)
         if (url.includes('/shorts/')) {
             return {
                 fullCategory: 'YouTube Shorts',
-                subcategory: null
+                subcategory: null,
+                emoji: '⚡'
             }
         }
-
-        // 1. Cricket
-        const cricketKeywords = ['cricket', 'ipl', 'test match', 'odi', 't20', 'world cup', 'india vs', 'highlight']
-        if (cricketKeywords.some(kw => text.includes(kw))) {
-            let sub = 'Cricket'
-            if (text.includes('ipl')) sub = 'IPL'
-            else if (text.includes('world cup')) sub = 'World Cup'
-
-            return {
-                fullCategory: 'YouTube Cricket',
-                subcategory: sub
-            }
-        }
-
-        // 2. Music (Hindi vs English)
-        const musicKeywords = ['music', 'song', 'official', 'vevo', 'lyrics', 'video']
-        if (musicKeywords.some(kw => text.includes(kw))) {
-            const hindiKeywords = ['hindi', 'bollywood', 't-series', 'zee', 'desi', 'punjabi', 'badshah', 'arijit']
-            const isHindi = hindiKeywords.some(kw => text.includes(kw))
-            const lang = isHindi ? 'Hindi' : 'English'
-
-            return {
-                fullCategory: `YouTube Music - ${lang}`,
-                subcategory: lang
-            }
-        }
-
-        // 3. News
-        const newsKeywords = ['news', 'breaking', 'headline', 'report', 'live']
-        if (newsKeywords.some(kw => text.includes(kw))) {
-            return {
-                fullCategory: 'YouTube News',
-                subcategory: 'General'
-            }
-        }
-
-        // 4. Tech
-        const techKeywords = ['tech', 'review', 'unboxing', 'phone', 'gadget']
-        if (techKeywords.some(kw => text.includes(kw))) {
-            return {
-                fullCategory: 'YouTube Tech',
-                subcategory: 'Tech'
-            }
-        }
-
         return {
             fullCategory: 'YouTube Videos',
-            subcategory: null
+            subcategory: null,
+            emoji: '🎥'
         }
     }
 
-    // ==========================================
-    // INSTAGRAM STRICT CATEGORIZATION
-    // ==========================================
     if (platform === 'Instagram') {
         if (url.includes('/reel/')) {
-            // Detect Reel Type
-            const types = {
-                'Comedy': ['comedy', 'funny', 'meme', 'laugh'],
-                'Dance': ['dance', 'dancing', 'moves'],
-                'Food': ['food', 'cooking', 'recipe', 'tasty'],
-                'Politics': ['politics', 'election', 'vote', 'minister', 'modi', 'bjp', 'congress', 'news', 'speech', 'rally'],
-                'Travel': ['travel', 'vacation', 'explore', 'adventure', 'destination', 'tourism', 'trip'],
-                'Fashion': ['fashion', 'style', 'outfit', 'ootd', 'clothing', 'trendy'],
-                'Fitness': ['fitness', 'workout', 'gym', 'exercise', 'health', 'training']
-            }
-
-            let sub = null
-            for (const [type, kws] of Object.entries(types)) {
-                if (kws.some(kw => text.includes(kw))) {
-                    sub = type
-                    break
-                }
-            }
-
-            if (sub) {
-                return {
-                    fullCategory: `Instagram Reels - ${sub}`,
-                    subcategory: sub
-                }
-            }
-
             return {
                 fullCategory: 'Instagram Reels',
-                subcategory: null
+                subcategory: null,
+                emoji: '🎬'
             }
         }
-
         return {
             fullCategory: 'Instagram Posts',
-            subcategory: null
+            subcategory: null,
+            emoji: '📸'
         }
     }
 
+    // Fallback
     return {
         fullCategory: urlAnalysis?.suggestedCategory || 'Videos',
-        subcategory: null
+        subcategory: null,
+        emoji: urlAnalysis?.emoji || '🔗'
     }
 }
