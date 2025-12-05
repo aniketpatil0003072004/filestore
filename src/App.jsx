@@ -82,6 +82,7 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search)
     const sharedUrl = urlParams.get('url') || urlParams.get('text')
     const sharedTitle = urlParams.get('title')
+    const manualMode = urlParams.get('manual') === 'true'
 
     if (sharedUrl && sessionToken) {
       // Analyze the URL for smart categorization
@@ -89,7 +90,8 @@ function App() {
       setUrlAnalysis(analysis)
 
       // AUTO-SAVE MODE: Save directly without showing modal
-      if (autoSaveMode) {
+      // BUT if manualMode is requested (from Service Worker), skip auto-save
+      if (autoSaveMode && !manualMode) {
         autoSaveSharedLink(sharedUrl, sharedTitle, analysis)
       } else {
         // MANUAL MODE: Show modal for confirmation

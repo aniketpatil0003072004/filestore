@@ -70,70 +70,123 @@ self.addEventListener('fetch', (event) => {
 })
 
 // ========== SHARE TARGET HANDLER ==========
+// ========== SHARE TARGET HANDLER ==========
 async function handleShareTarget(request) {
     try {
         const formData = await request.formData()
         const sharedUrl = formData.get('url') || formData.get('text') || formData.get('title')
+        const sharedText = formData.get('text') || ''
+        const sharedTitle = formData.get('title') || ''
+
+        // Combine text and title to look for user commands
+        // Remove the URL from the text to avoid false positives
+        const userText = `${sharedText} ${sharedTitle}`.replace(sharedUrl, '').toLowerCase()
 
         if (!sharedUrl) {
             return Response.redirect('/', 303)
         }
 
-        // Get user token from IndexedDB
-        const token = await getTokenFromDB()
+        // Check for explicit user commands (e.g. "news", "movie kannada")
+        const commandCategory = detectUserCommandCategory(userText)
 
-        if (!token) {
-            // No token - redirect to app for login
-            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}`, 303)
-        }
+        if (commandCategory) {
+            // COMMAND DETECTED: Silent Background Save
+            const token = await getTokenFromDB()
 
-        // Analyze URL
-        const analysis = analyzeUrl(sharedUrl)
+            if (!token) {
+                // No token - redirect to app for login
+                return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}&manual=true`, 303)
+            }
 
-        // Save in background
-        try {
-            // Fetch metadata
-            const metadata = await enrichMetadata(sharedUrl)
+            // Analyze URL (basic)
+            const analysis = analyzeUrl(sharedUrl)
 
-            // Analyze content
-            const contentAnalysis = analyzeContentWithMetadata(sharedUrl, metadata, analysis)
+            // Save in background
+            try {
+                // Fetch metadata
+                const metadata = await enrichMetadata(sharedUrl)
 
-            await saveToDatabase(sharedUrl, analysis, token, metadata, contentAnalysis)
+                // Construct content analysis from command
+                const contentAnalysis = {
+                    fullCategory: commandCategory.category,
+                    subcategory: commandCategory.subcategory
+                }
 
-            // Show success notification
-            const categoryName = contentAnalysis?.fullCategory || analysis.suggestedCategory
-            const title = metadata?.title || 'Saved Link'
-            const channel = metadata?.channelName ? `By: ${metadata.channelName}` : ''
+                await saveToDatabase(sharedUrl, analysis, token, metadata, contentAnalysis)
 
-            self.registration.showNotification('Video Vault', {
-                body: `${analysis.emoji} Saved to ${categoryName}!\n${title}\n${channel}`,
-                icon: metadata?.thumbnail || '/icon-192.png',
-                badge: '/icon-192.png',
-                tag: 'video-vault-save',
-                requireInteraction: false
-            })
+                // Show success notification
+                const categoryName = commandCategory.category
+                const title = metadata?.title || 'Saved Link'
 
-            // Redirect to saved.html which auto-closes
-            return Response.redirect('/saved.html', 303)
+                self.registration.showNotification('Video Vault', {
+                    body: `${commandCategory.emoji || '✅'} Saved to ${categoryName}!\n${title}`,
+                    icon: metadata?.thumbnail || '/icon-192.png',
+                    badge: '/icon-192.png',
+                    tag: 'video-vault-save',
+                    requireInteraction: false
+                })
 
-        } catch (error) {
-            console.error('Background save error:', error)
+                // Redirect to saved.html which auto-closes
+                return Response.redirect('/saved.html', 303)
 
-            // Show error notification
-            self.registration.showNotification('Video Vault', {
-                body: '❌ Failed to save. Opening app...',
-                icon: '/icon-192.png',
-                tag: 'video-vault-error'
-            })
-
-            // Fallback: redirect to app
-            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}`, 303)
+            } catch (error) {
+                console.error('Background save error:', error)
+                // Fallback: redirect to app
+                return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}&manual=true`, 303)
+            }
+        } else {
+            // NO COMMAND: Redirect to App for Manual Selection
+            // The user wants to be asked if they didn't specify a section
+            return Response.redirect(`/?url=${encodeURIComponent(sharedUrl)}&manual=true`, 303)
         }
 
     } catch (error) {
         console.error('Share target error:', error)
         return Response.redirect('/', 303)
     }
+}
+
+// ========== USER COMMAND DETECTOR ==========
+function detectUserCommandCategory(text) {
+    if (!text) return null
+    const lowerText = text.toLowerCase()
+
+    // 1. News
+    if (lowerText.includes('news')) {
+        return { category: 'YouTube News', subcategory: 'General', emoji: '📰' }
+    }
+
+    // 2. Movies
+    if (lowerText.includes('movie')) {
+        // Language detection for movies
+        if (lowerText.includes('kannada')) return { category: 'YouTube Movies', subcategory: 'Kannada', emoji: '🎥' }
+        if (lowerText.includes('hindi')) return { category: 'YouTube Movies', subcategory: 'Hindi', emoji: '🎥' }
+        if (lowerText.includes('tamil')) return { category: 'YouTube Movies', subcategory: 'Tamil', emoji: '🎥' }
+        if (lowerText.includes('telugu')) return { category: 'YouTube Movies', subcategory: 'Telugu', emoji: '🎥' }
+        if (lowerText.includes('malayalam')) return { category: 'YouTube Movies', subcategory: 'Malayalam', emoji: '🎥' }
+        if (lowerText.includes('english')) return { category: 'English Movies', subcategory: 'YouTube', emoji: '🎬' }
+
+        return { category: 'YouTube Movies', subcategory: 'General', emoji: '🎥' }
+    }
+
+    // 3. Music / Songs
+    if (lowerText.includes('song') || lowerText.includes('music')) {
+        if (lowerText.includes('hindi')) return { category: 'YouTube Music - Hindi', subcategory: 'Hindi', emoji: '🎵' }
+        if (lowerText.includes('english')) return { category: 'YouTube Music - English', subcategory: 'English', emoji: '🎵' }
+        return { category: 'YouTube Music - Hindi', subcategory: 'Hindi', emoji: '🎵' } // Default to Hindi as per user preference likely
+    }
+
+    // 4. Tech
+    if (lowerText.includes('tech') || lowerText.includes('review')) {
+        return { category: 'YouTube Tech', subcategory: 'Tech', emoji: '🔧' }
+    }
+
+    // 5. Cricket
+    if (lowerText.includes('cricket') || lowerText.includes('ipl') || lowerText.includes('match')) {
+        return { category: 'YouTube Sports', subcategory: 'Cricket', emoji: '🏏' }
+    }
+
+    return null
 }
 
 
