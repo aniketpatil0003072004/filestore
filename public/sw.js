@@ -92,12 +92,22 @@ async function handleShareTarget(request) {
 
         // Save in background
         try {
-            await saveToDatabase(sharedUrl, analysis, token)
+            // Fetch metadata
+            const metadata = await enrichMetadata(sharedUrl)
+
+            // Analyze content
+            const contentAnalysis = analyzeContentWithMetadata(sharedUrl, metadata, analysis)
+
+            await saveToDatabase(sharedUrl, analysis, token, metadata, contentAnalysis)
 
             // Show success notification
+            const categoryName = contentAnalysis?.fullCategory || analysis.suggestedCategory
+            const title = metadata?.title || 'Saved Link'
+            const channel = metadata?.channelName ? `By: ${metadata.channelName}` : ''
+
             self.registration.showNotification('Video Vault', {
-                body: `${analysis.emoji} Saved to ${analysis.suggestedCategory}!`,
-                icon: '/icon-192.png',
+                body: `${analysis.emoji} Saved to ${categoryName}!\n${title}\n${channel}`,
+                icon: metadata?.thumbnail || '/icon-192.png',
                 badge: '/icon-192.png',
                 tag: 'video-vault-save',
                 requireInteraction: false
@@ -160,19 +170,29 @@ function getTokenFromDB() {
 }
 
 // ========== SUPABASE - Save to Database ==========
-async function saveToDatabase(url, analysis, token) {
+async function saveToDatabase(url, analysis, token, metadata, contentAnalysis) {
     // Auto-generate title
-    const videoId = extractVideoId(url)
-    const title = videoId ? `Video ${videoId.substring(0, 8)}` : `Link ${Date.now()}`
+    let title = metadata?.title
+    if (!title) {
+        const videoId = extractVideoId(url)
+        title = videoId ? `Video ${videoId.substring(0, 8)}` : `Link ${Date.now()}`
+    }
 
     const newItem = {
         user_token: token,
         type: 'video',
         url: url,
         title: title,
-        category: analysis.suggestedCategory || 'Videos',
+        category: contentAnalysis?.fullCategory || analysis.suggestedCategory || 'Videos',
         notes: '',
-        image_url: null,
+        image_url: metadata?.thumbnail || null,
+        channel_name: metadata?.channelName || null,
+        creator_profile: metadata?.creatorProfile || null,
+        subcategory: contentAnalysis?.subcategory || null,
+        content_description: metadata?.description || null,
+        thumbnail_url: metadata?.thumbnail || null,
+        platform_category: metadata?.platform || null,
+        metadata: metadata || null,
         created_at: new Date().toISOString()
     }
 
@@ -411,3 +431,142 @@ self.addEventListener('message', (event) => {
     }
 })
 
+// ========== METADATA FETCHER (Inlined for SW) ==========
+async function enrichMetadata(url) {
+    try {
+        if (!url) return null
+        const lowerUrl = url.toLowerCase()
+
+        if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+            return await fetchYouTubeMetadata(url)
+        } else if (lowerUrl.includes('instagram.com')) {
+            return await fetchInstagramMetadata(url)
+        }
+        return null
+    } catch (e) {
+        console.error('Metadata fetch error:', e)
+        return null
+    }
+}
+
+async function fetchYouTubeMetadata(url) {
+    try {
+        const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+        const response = await fetch(oembedUrl)
+        if (!response.ok) throw new Error('oEmbed failed')
+        const data = await response.json()
+        return {
+            title: data.title,
+            channelName: data.author_name,
+            creatorProfile: data.author_url,
+            thumbnail: data.thumbnail_url,
+            platform: 'youtube',
+            success: true
+        }
+    } catch (e) {
+        // Fallback scraping
+        return await scrapeYouTubeMetadata(url)
+    }
+}
+
+async function fetchInstagramMetadata(url) {
+    try {
+        const oembedUrl = `https://graph.facebook.com/v12.0/instagram_oembed?url=${encodeURIComponent(url)}&access_token=`
+        const response = await fetch(oembedUrl)
+        if (!response.ok) throw new Error('oEmbed failed')
+        const data = await response.json()
+        return {
+            title: data.title,
+            channelName: data.author_name,
+            creatorProfile: data.author_url,
+            thumbnail: data.thumbnail_url,
+            platform: 'instagram',
+            success: true
+        }
+    } catch (e) {
+        return await scrapeInstagramMetadata(url)
+    }
+}
+
+async function scrapeYouTubeMetadata(url) {
+    try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+        const response = await fetch(proxyUrl)
+        const html = await response.text()
+        const title = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1]
+        const channel = html.match(/<link itemprop="name" content="([^"]+)"/)?.[1]
+        const thumb = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1]
+        return {
+            title: title || 'YouTube Video',
+            channelName: channel || 'Unknown Channel',
+            thumbnail: thumb || '',
+            platform: 'youtube',
+            success: true
+        }
+    } catch (e) {
+        return { success: false }
+    }
+}
+
+async function scrapeInstagramMetadata(url) {
+    try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+        const response = await fetch(proxyUrl)
+        const html = await response.text()
+        const title = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1]
+        const thumb = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1]
+        return {
+            title: title || 'Instagram Post',
+            thumbnail: thumb || '',
+            platform: 'instagram',
+            success: true
+        }
+    } catch (e) {
+        return { success: false }
+    }
+}
+
+// ========== CONTENT ANALYZER (Inlined for SW) ==========
+function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
+    const title = metadata?.title || ''
+    const description = metadata?.description || ''
+    const text = `${title} ${description}`.toLowerCase()
+
+    // Cricket Detection
+    const cricketKeywords = ['cricket', 'ipl', 'world cup', 'test match', 'odi', 't20', 'india vs']
+    if (cricketKeywords.filter(kw => text.includes(kw)).length >= 1) {
+        let sub = 'Cricket'
+        if (text.includes('ipl')) sub = 'IPL'
+        else if (text.includes('world cup')) sub = 'World Cup'
+        else if (text.includes('test match')) sub = 'Test Match'
+
+        return {
+            fullCategory: sub === 'Cricket' ? 'Cricket' : `Cricket - ${sub}`,
+            subcategory: sub
+        }
+    }
+
+    // Music Detection
+    const musicKeywords = ['music', 'song', 'official', 'vevo', 'lyrics']
+    if (musicKeywords.some(kw => text.includes(kw))) {
+        let sub = 'General'
+        if (text.includes('bollywood') || text.includes('hindi')) sub = 'Bollywood'
+        else if (text.includes('hip hop') || text.includes('rap')) sub = 'Hip Hop'
+
+        return {
+            fullCategory: sub === 'General' ? 'Music' : `Music - ${sub}`,
+            subcategory: sub
+        }
+    }
+
+    // News Detection
+    const newsKeywords = ['news', 'breaking', 'headline']
+    if (newsKeywords.some(kw => text.includes(kw))) {
+        return { fullCategory: 'News', subcategory: 'General' }
+    }
+
+    return {
+        fullCategory: urlAnalysis?.suggestedCategory || 'Videos',
+        subcategory: null
+    }
+}

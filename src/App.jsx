@@ -4,6 +4,8 @@ import Auth from './Auth'
 import { analyzeUrl, getPredefinedCategories, getCategoryEmoji } from './urlAnalyzer'
 import { storeToken, removeToken } from './indexedDBHelper'
 import SuccessToast from './components/SuccessToast'
+import { enrichMetadata } from './metadataFetcher'
+import { analyzeContentWithMetadata } from './categoryHelper'
 import './App.css'
 
 function App() {
@@ -14,6 +16,7 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState('All')
   const [uploading, setUploading] = useState(false)
+  const [fetchingMetadata, setFetchingMetadata] = useState(false)
 
   // Auto-save mode (default: ON)
   const [autoSaveMode, setAutoSaveMode] = useState(() => {
@@ -36,6 +39,7 @@ function App() {
   })
   const [selectedFile, setSelectedFile] = useState(null)
   const [urlAnalysis, setUrlAnalysis] = useState(null) // Smart URL detection result
+  const [enrichedMetadata, setEnrichedMetadata] = useState(null) // Fetched metadata
 
   // Ref for auto-focus
   const urlInputRef = useRef(null)
@@ -186,11 +190,26 @@ function App() {
     try {
       setUploading(true)
 
+      // Fetch rich metadata
+      let metadata = null
+      let contentAnalysis = null
+
+      try {
+        metadata = await enrichMetadata(url)
+        contentAnalysis = analyzeContentWithMetadata(url, metadata, analysis)
+      } catch (err) {
+        console.error('Auto-save metadata fetch error:', err)
+      }
+
       // Auto-generate title if empty
       let finalTitle = title
       if (!finalTitle || finalTitle.trim() === '') {
-        const videoId = extractVideoId(url)
-        finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Saved Link'
+        if (metadata?.title) {
+          finalTitle = metadata.title
+        } else {
+          const videoId = extractVideoId(url)
+          finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Saved Link'
+        }
       }
 
       const newItem = {
@@ -198,9 +217,16 @@ function App() {
         type: 'video',
         url: url,
         title: finalTitle,
-        category: analysis.suggestedCategory || 'Videos',
+        category: contentAnalysis?.fullCategory || analysis.suggestedCategory || 'Videos',
         notes: '',
-        image_url: null,
+        image_url: metadata?.thumbnail || null,
+        channel_name: metadata?.channelName || null,
+        creator_profile: metadata?.creatorProfile || null,
+        subcategory: contentAnalysis?.subcategory || null,
+        content_description: metadata?.description || null,
+        thumbnail_url: metadata?.thumbnail || null,
+        platform_category: metadata?.platform || null,
+        metadata: metadata || null,
         created_at: new Date().toISOString()
       }
 
@@ -297,7 +323,14 @@ function App() {
         type: itemType,
         ...formData,
         title: finalTitle,
-        image_url: imageUrl,
+        image_url: imageUrl || enrichedMetadata?.thumbnail || null,
+        channel_name: enrichedMetadata?.channelName || null,
+        creator_profile: enrichedMetadata?.creatorProfile || null,
+        subcategory: enrichedMetadata?.subcategory || null, // Will be filled by backend logic or we can add it here if we had it in state
+        content_description: enrichedMetadata?.description || null,
+        thumbnail_url: enrichedMetadata?.thumbnail || null,
+        platform_category: enrichedMetadata?.platform || null,
+        metadata: enrichedMetadata || null,
         created_at: new Date().toISOString()
       }
 
@@ -477,8 +510,56 @@ function App() {
               </div>
 
               <div className="video-info">
-                <span className="video-category">{item.category || 'Uncategorized'}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.25rem' }}>
+                  <div className="category-badges" style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                    <span className="video-category">{item.category || 'Uncategorized'}</span>
+                    {item.subcategory && (
+                      <span className="subcategory-badge" style={{
+                        fontSize: '0.7rem',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '12px',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-secondary)'
+                      }}>
+                        {item.subcategory}
+                      </span>
+                    )}
+                  </div>
+                  {item.platform_category && (
+                    <span className="platform-badge" style={{ fontSize: '1rem' }}>
+                      {item.platform_category === 'youtube' ? '▶️' : item.platform_category === 'instagram' ? '📸' : ''}
+                    </span>
+                  )}
+                </div>
+
                 <h3 className="video-title">{item.title || (item.type === 'video' ? 'Untitled Video' : 'Untitled Note')}</h3>
+
+                {item.channel_name && (
+                  <div className="creator-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    <span>📺 {item.channel_name}</span>
+                    {item.creator_profile && (
+                      <a href={item.creator_profile} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                        View Profile
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {item.content_description && (
+                  <p className="video-description" style={{
+                    fontSize: '0.8rem',
+                    color: 'var(--text-secondary)',
+                    marginBottom: '0.5rem',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                  }}>
+                    {item.content_description}
+                  </p>
+                )}
+
                 <p className="video-notes">{item.notes}</p>
                 <div className="video-actions">
                   <button
@@ -530,7 +611,7 @@ function App() {
                       required={itemType === 'video'}
                       placeholder="https://youtube.com/... or https://instagram.com/..."
                       value={formData.url}
-                      onChange={e => {
+                      onChange={async e => {
                         const newUrl = e.target.value
                         setFormData({ ...formData, url: newUrl })
 
@@ -539,12 +620,36 @@ function App() {
                           const analysis = analyzeUrl(newUrl)
                           setUrlAnalysis(analysis)
 
-                          // Auto-fill category if not already set or if it was auto-suggested before
-                          if (!formData.category || urlAnalysis?.suggestedCategory === formData.category) {
-                            setFormData(prev => ({ ...prev, url: newUrl, category: analysis.suggestedCategory || '' }))
+                          // Fetch rich metadata
+                          setFetchingMetadata(true)
+                          try {
+                            const metadata = await enrichMetadata(newUrl)
+                            setEnrichedMetadata(metadata)
+
+                            // Analyze content with metadata
+                            const contentAnalysis = analyzeContentWithMetadata(newUrl, metadata, analysis)
+
+                            // Auto-fill category if not already set or if it was auto-suggested before
+                            if (!formData.category || urlAnalysis?.suggestedCategory === formData.category) {
+                              setFormData(prev => ({
+                                ...prev,
+                                url: newUrl,
+                                category: contentAnalysis.fullCategory || analysis.suggestedCategory || ''
+                              }))
+                            }
+
+                            // Auto-fill title if empty
+                            if (!formData.title && metadata.title) {
+                              setFormData(prev => ({ ...prev, title: metadata.title }))
+                            }
+                          } catch (err) {
+                            console.error('Metadata fetch error:', err)
+                          } finally {
+                            setFetchingMetadata(false)
                           }
                         } else {
                           setUrlAnalysis(null)
+                          setEnrichedMetadata(null)
                         }
                       }}
                       style={{ flex: 1 }}
@@ -561,7 +666,27 @@ function App() {
                             // Analyze pasted URL
                             const analysis = analyzeUrl(text)
                             setUrlAnalysis(analysis)
-                            setFormData({ ...formData, url: text, category: analysis.suggestedCategory || '' })
+
+                            // Fetch rich metadata
+                            setFetchingMetadata(true)
+                            try {
+                              const metadata = await enrichMetadata(text)
+                              setEnrichedMetadata(metadata)
+
+                              const contentAnalysis = analyzeContentWithMetadata(text, metadata, analysis)
+
+                              setFormData({
+                                ...formData,
+                                url: text,
+                                category: contentAnalysis.fullCategory || analysis.suggestedCategory || '',
+                                title: metadata.title || ''
+                              })
+                            } catch (err) {
+                              console.error('Paste metadata error:', err)
+                              setFormData({ ...formData, url: text, category: analysis.suggestedCategory || '' })
+                            } finally {
+                              setFetchingMetadata(false)
+                            }
                           }
                         } catch (err) {
                           alert('Failed to read clipboard. Please paste manually.')
@@ -591,13 +716,26 @@ function App() {
                       fontSize: '0.875rem',
                       color: 'var(--text-primary)'
                     }}>
-                      <span style={{ fontSize: '1.25rem' }}>{urlAnalysis.emoji}</span>
+                      {fetchingMetadata ? (
+                        <div className="loading-spinner" style={{ width: '20px', height: '20px', border: '2px solid var(--accent-primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                      ) : (
+                        <span style={{ fontSize: '1.25rem' }}>{urlAnalysis.emoji}</span>
+                      )}
                       <div>
-                        <strong>Detected:</strong> {urlAnalysis.description}
-                        {urlAnalysis.suggestedCategory && (
-                          <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
-                            → Category: <strong>{urlAnalysis.suggestedCategory}</strong>
-                          </span>
+                        {fetchingMetadata ? (
+                          <strong>Fetching video details...</strong>
+                        ) : (
+                          <>
+                            <strong>Detected:</strong> {enrichedMetadata?.title ? 'Video Found' : urlAnalysis.description}
+                            {enrichedMetadata?.channelName && (
+                              <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>by {enrichedMetadata.channelName}</div>
+                            )}
+                            {formData.category && (
+                              <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
+                                → Category: <strong>{formData.category}</strong>
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
