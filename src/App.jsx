@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
+import { analyzeUrl, getPredefinedCategories, getCategoryEmoji } from './urlAnalyzer'
 import './App.css'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
     notes: ''
   })
   const [selectedFile, setSelectedFile] = useState(null)
+  const [urlAnalysis, setUrlAnalysis] = useState(null) // Smart URL detection result
 
   // Ref for auto-focus
   const urlInputRef = useRef(null)
@@ -56,11 +58,15 @@ function App() {
     const sharedTitle = urlParams.get('title')
 
     if (sharedUrl && sessionToken) {
-      // Pre-fill form with shared URL
+      // Analyze the URL for smart categorization
+      const analysis = analyzeUrl(sharedUrl)
+      setUrlAnalysis(analysis)
+
+      // Pre-fill form with shared URL and suggested category
       setFormData({
         url: sharedUrl,
         title: sharedTitle || '',
-        category: '',
+        category: analysis.suggestedCategory || '', // Auto-fill category!
         notes: ''
       })
       setItemType('video')
@@ -220,6 +226,7 @@ function App() {
       setItems([data[0], ...items])
       setFormData({ url: '', title: '', category: '', notes: '' })
       setSelectedFile(null)
+      setUrlAnalysis(null) // Reset URL analysis
       setIsModalOpen(false)
     } catch (error) {
       alert('Error saving item: ' + error.message)
@@ -300,6 +307,7 @@ function App() {
             className={`category-pill ${activeCategory === cat ? 'active' : ''}`}
             onClick={() => setActiveCategory(cat)}
           >
+            {cat !== 'All' && <span style={{ marginRight: '0.25rem' }}>{getCategoryEmoji(cat)}</span>}
             {cat}
           </button>
         ))}
@@ -413,7 +421,23 @@ function App() {
                       required={itemType === 'video'}
                       placeholder="https://youtube.com/... or https://instagram.com/..."
                       value={formData.url}
-                      onChange={e => setFormData({ ...formData, url: e.target.value })}
+                      onChange={e => {
+                        const newUrl = e.target.value
+                        setFormData({ ...formData, url: newUrl })
+
+                        // Analyze URL and auto-suggest category
+                        if (newUrl) {
+                          const analysis = analyzeUrl(newUrl)
+                          setUrlAnalysis(analysis)
+
+                          // Auto-fill category if not already set or if it was auto-suggested before
+                          if (!formData.category || urlAnalysis?.suggestedCategory === formData.category) {
+                            setFormData(prev => ({ ...prev, url: newUrl, category: analysis.suggestedCategory || '' }))
+                          }
+                        } else {
+                          setUrlAnalysis(null)
+                        }
+                      }}
                       style={{ flex: 1 }}
                     />
                     <button
@@ -424,6 +448,11 @@ function App() {
                           const text = await navigator.clipboard.readText()
                           if (text) {
                             setFormData({ ...formData, url: text })
+
+                            // Analyze pasted URL
+                            const analysis = analyzeUrl(text)
+                            setUrlAnalysis(analysis)
+                            setFormData({ ...formData, url: text, category: analysis.suggestedCategory || '' })
                           }
                         } catch (err) {
                           alert('Failed to read clipboard. Please paste manually.')
@@ -438,6 +467,32 @@ function App() {
                       📋 Paste
                     </button>
                   </div>
+
+                  {/* Smart Detection Banner */}
+                  {urlAnalysis && urlAnalysis.confidence !== 'low' && (
+                    <div style={{
+                      marginTop: '0.75rem',
+                      padding: '0.75rem 1rem',
+                      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      fontSize: '0.875rem',
+                      color: 'var(--text-primary)'
+                    }}>
+                      <span style={{ fontSize: '1.25rem' }}>{urlAnalysis.emoji}</span>
+                      <div>
+                        <strong>Detected:</strong> {urlAnalysis.description}
+                        {urlAnalysis.suggestedCategory && (
+                          <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
+                            → Category: <strong>{urlAnalysis.suggestedCategory}</strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="form-group">
@@ -453,52 +508,166 @@ function App() {
               <div className="form-group">
                 <label className="form-label">Category</label>
 
-                {/* Show existing categories as clickable pills */}
-                {categories.filter(c => c !== 'All').length > 0 && (
-                  <div style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '0.5rem',
-                    marginBottom: '0.75rem'
-                  }}>
-                    {categories.filter(c => c !== 'All').map(cat => (
+                {/* Show predefined categories with emojis */}
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                  marginBottom: '0.75rem'
+                }}>
+                  {/* Suggested category first if detected */}
+                  {urlAnalysis && urlAnalysis.suggestedCategory && (
+                    <>
+                      <div style={{
+                        width: '100%',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.25rem',
+                        fontWeight: '600'
+                      }}>
+                        ✨ SUGGESTED
+                      </div>
                       <button
-                        key={cat}
+                        key={urlAnalysis.suggestedCategory}
                         type="button"
-                        onClick={() => setFormData({ ...formData, category: cat })}
+                        onClick={() => setFormData({ ...formData, category: urlAnalysis.suggestedCategory })}
                         style={{
                           padding: '0.5rem 1rem',
                           borderRadius: '20px',
-                          border: formData.category === cat
+                          border: formData.category === urlAnalysis.suggestedCategory
                             ? '2px solid var(--accent-primary)'
-                            : '1px solid var(--border-color)',
-                          background: formData.category === cat
+                            : '2px solid rgba(99, 102, 241, 0.5)',
+                          background: formData.category === urlAnalysis.suggestedCategory
                             ? 'var(--accent-primary)'
-                            : 'var(--bg-secondary)',
-                          color: formData.category === cat
+                            : 'rgba(99, 102, 241, 0.1)',
+                          color: formData.category === urlAnalysis.suggestedCategory
                             ? 'white'
                             : 'var(--text-primary)',
                           cursor: 'pointer',
                           fontSize: '0.875rem',
-                          fontWeight: formData.category === cat ? '600' : '400',
-                          transition: 'all 0.2s'
+                          fontWeight: '600',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        {urlAnalysis.emoji} {urlAnalysis.suggestedCategory}
+                      </button>
+                      <div style={{ width: '100%', height: '1px', background: 'var(--border-color)', margin: '0.5rem 0' }} />
+                    </>
+                  )}
+
+                  {/* Show existing user categories */}
+                  {categories.filter(c => c !== 'All').length > 0 && (
+                    <>
+                      <div style={{
+                        width: '100%',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.25rem',
+                        fontWeight: '600'
+                      }}>
+                        YOUR CATEGORIES
+                      </div>
+                      {categories.filter(c => c !== 'All' && c !== urlAnalysis?.suggestedCategory).map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, category: cat })}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            borderRadius: '20px',
+                            border: formData.category === cat
+                              ? '2px solid var(--accent-primary)'
+                              : '1px solid var(--border-color)',
+                            background: formData.category === cat
+                              ? 'var(--accent-primary)'
+                              : 'var(--bg-secondary)',
+                            color: formData.category === cat
+                              ? 'white'
+                              : 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontSize: '0.875rem',
+                            fontWeight: formData.category === cat ? '600' : '400',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                          onMouseEnter={e => {
+                            if (formData.category !== cat) {
+                              e.target.style.borderColor = 'var(--accent-primary)'
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (formData.category !== cat) {
+                              e.target.style.borderColor = 'var(--border-color)'
+                            }
+                          }}
+                        >
+                          {getCategoryEmoji(cat)} {cat}
+                        </button>
+                      ))}
+                      <div style={{ width: '100%', height: '1px', background: 'var(--border-color)', margin: '0.5rem 0' }} />
+                    </>
+                  )}
+
+                  {/* Show predefined categories */}
+                  <div style={{
+                    width: '100%',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                    marginBottom: '0.25rem',
+                    fontWeight: '600'
+                  }}>
+                    QUICK SELECT
+                  </div>
+                  {getPredefinedCategories()
+                    .filter(predef =>
+                      !categories.includes(predef.name) &&
+                      predef.name !== urlAnalysis?.suggestedCategory
+                    )
+                    .map(predef => (
+                      <button
+                        key={predef.name}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, category: predef.name })}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          borderRadius: '20px',
+                          border: formData.category === predef.name
+                            ? '2px solid var(--accent-primary)'
+                            : '1px solid var(--border-color)',
+                          background: formData.category === predef.name
+                            ? 'var(--accent-primary)'
+                            : 'var(--bg-secondary)',
+                          color: formData.category === predef.name
+                            ? 'white'
+                            : 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem',
+                          fontWeight: formData.category === predef.name ? '600' : '400',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
                         }}
                         onMouseEnter={e => {
-                          if (formData.category !== cat) {
+                          if (formData.category !== predef.name) {
                             e.target.style.borderColor = 'var(--accent-primary)'
                           }
                         }}
                         onMouseLeave={e => {
-                          if (formData.category !== cat) {
+                          if (formData.category !== predef.name) {
                             e.target.style.borderColor = 'var(--border-color)'
                           }
                         }}
                       >
-                        {cat}
+                        {predef.emoji} {predef.name}
                       </button>
                     ))}
-                  </div>
-                )}
+                </div>
 
                 {/* Input for new category or custom entry */}
                 <input
