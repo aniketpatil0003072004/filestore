@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import { analyzeUrl, getPredefinedCategories, getCategoryEmoji } from './urlAnalyzer'
+import SuccessToast from './components/SuccessToast'
 import './App.css'
 
 function App() {
@@ -12,6 +13,17 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activeCategory, setActiveCategory] = useState('All')
   const [uploading, setUploading] = useState(false)
+
+  // Auto-save mode (default: ON)
+  const [autoSaveMode, setAutoSaveMode] = useState(() => {
+    const saved = localStorage.getItem('auto_save_mode')
+    return saved !== null ? saved === 'true' : true // Default to true
+  })
+
+  // Success toast state
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+  const [toastEmoji, setToastEmoji] = useState('✅')
 
   // Form State
   const [itemType, setItemType] = useState('video')
@@ -62,20 +74,25 @@ function App() {
       const analysis = analyzeUrl(sharedUrl)
       setUrlAnalysis(analysis)
 
-      // Pre-fill form with shared URL and suggested category
-      setFormData({
-        url: sharedUrl,
-        title: sharedTitle || '',
-        category: analysis.suggestedCategory || '', // Auto-fill category!
-        notes: ''
-      })
-      setItemType('video')
-      setIsModalOpen(true)
+      // AUTO-SAVE MODE: Save directly without showing modal
+      if (autoSaveMode) {
+        autoSaveSharedLink(sharedUrl, sharedTitle, analysis)
+      } else {
+        // MANUAL MODE: Show modal for confirmation
+        setFormData({
+          url: sharedUrl,
+          title: sharedTitle || '',
+          category: analysis.suggestedCategory || '',
+          notes: ''
+        })
+        setItemType('video')
+        setIsModalOpen(true)
+      }
 
       // Clean URL params
       window.history.replaceState({}, '', '/')
     }
-  }, [sessionToken])
+  }, [sessionToken, autoSaveMode])
 
   // Persist token
   useEffect(() => {
@@ -148,6 +165,60 @@ function App() {
       console.error('Error extracting video ID', e)
     }
     return null
+  }
+
+  // Auto-save shared link without showing modal
+  const autoSaveSharedLink = async (url, title, analysis) => {
+    try {
+      setUploading(true)
+
+      // Auto-generate title if empty
+      let finalTitle = title
+      if (!finalTitle || finalTitle.trim() === '') {
+        const videoId = extractVideoId(url)
+        finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Saved Link'
+      }
+
+      const newItem = {
+        user_token: sessionToken,
+        type: 'video',
+        url: url,
+        title: finalTitle,
+        category: analysis.suggestedCategory || 'Videos',
+        notes: '',
+        image_url: null,
+        created_at: new Date().toISOString()
+      }
+
+      const { data, error } = await supabase
+        .from('items')
+        .insert([newItem])
+        .select()
+
+      if (error) throw error
+
+      // Add to items list
+      setItems([data[0], ...items])
+
+      // Show success toast
+      setToastEmoji(analysis.emoji || '✅')
+      setToastMessage(`Saved to ${analysis.suggestedCategory || 'Videos'}!`)
+      setShowToast(true)
+
+      // Switch to the category view
+      if (analysis.suggestedCategory) {
+        setActiveCategory(analysis.suggestedCategory)
+      }
+
+    } catch (error) {
+      console.error('Error auto-saving:', error.message)
+      // Show error toast
+      setToastEmoji('❌')
+      setToastMessage('Failed to save. Please try again.')
+      setShowToast(true)
+    } finally {
+      setUploading(false)
+    }
   }
 
   const getThumbnail = (url) => {
@@ -269,6 +340,17 @@ function App() {
     setShowInstallButton(false)
   }
 
+  const toggleAutoSave = () => {
+    const newValue = !autoSaveMode
+    setAutoSaveMode(newValue)
+    localStorage.setItem('auto_save_mode', newValue.toString())
+
+    // Show toast notification
+    setToastEmoji(newValue ? '⚡' : '📝')
+    setToastMessage(newValue ? 'Auto-save enabled!' : 'Manual mode enabled')
+    setShowToast(true)
+  }
+
   const filteredItems = activeCategory === 'All'
     ? items
     : items.filter(i => i.category === activeCategory)
@@ -291,6 +373,19 @@ function App() {
               📱 Install App
             </button>
           )}
+          <button
+            className="add-btn"
+            onClick={toggleAutoSave}
+            style={{
+              background: autoSaveMode
+                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              minWidth: '140px'
+            }}
+            title={autoSaveMode ? 'Auto-save ON' : 'Manual mode ON'}
+          >
+            {autoSaveMode ? '⚡ Auto-Save' : '📝 Manual'}
+          </button>
           <button className="add-btn" onClick={() => setIsModalOpen(true)}>
             + Add Item
           </button>
@@ -708,6 +803,16 @@ function App() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Success Toast Notification */}
+      {showToast && (
+        <SuccessToast
+          message={toastMessage}
+          emoji={toastEmoji}
+          onClose={() => setShowToast(false)}
+          duration={3000}
+        />
       )}
     </div>
   )

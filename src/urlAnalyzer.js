@@ -42,7 +42,13 @@ const EDUCATIONAL_KEYWORDS = [
     'physics',
     'chemistry',
     'biology',
-    'history'
+    'history',
+    'study',
+    'academy',
+    'university',
+    'college',
+    'training',
+    'workshop'
 ]
 
 // Music keywords
@@ -62,7 +68,12 @@ const MUSIC_KEYWORDS = [
     'live',
     'concert',
     'mv',
-    'musicvideo'
+    'musicvideo',
+    'band',
+    'singer',
+    'playlist',
+    'feat',
+    'ft'
 ]
 
 // Podcast keywords
@@ -73,6 +84,64 @@ const PODCAST_KEYWORDS = [
     'talk',
     'discussion',
     'conversation'
+]
+
+// Cooking keywords
+const COOKING_KEYWORDS = [
+    'recipe',
+    'cooking',
+    'food',
+    'chef',
+    'kitchen',
+    'baking',
+    'meal',
+    'dish',
+    'cuisine',
+    'cook',
+    'tasty',
+    'delicious',
+    'restaurant',
+    'foodie',
+    'homemade'
+]
+
+// Fitness keywords
+const FITNESS_KEYWORDS = [
+    'workout',
+    'fitness',
+    'exercise',
+    'gym',
+    'training',
+    'yoga',
+    'cardio',
+    'strength',
+    'muscle',
+    'health',
+    'diet',
+    'bodybuilding',
+    'crossfit',
+    'running',
+    'weight'
+]
+
+// Tech keywords
+const TECH_KEYWORDS = [
+    'tech',
+    'technology',
+    'coding',
+    'programming',
+    'software',
+    'hardware',
+    'review',
+    'unboxing',
+    'diy',
+    'build',
+    'setup',
+    'computer',
+    'laptop',
+    'phone',
+    'gadget',
+    'device'
 ]
 
 /**
@@ -118,6 +187,45 @@ export function analyzeUrl(url) {
                 confidence: 'high',
                 emoji: '⚡',
                 description: 'YouTube Short'
+            }
+        }
+
+        // Check for cooking content
+        const hasCookingKeyword = COOKING_KEYWORDS.some(keyword => lowerUrl.includes(keyword))
+        if (hasCookingKeyword) {
+            return {
+                platform: 'youtube',
+                contentType: 'cooking',
+                suggestedCategory: 'Cooking',
+                confidence: 'high',
+                emoji: '🍳',
+                description: 'Cooking video'
+            }
+        }
+
+        // Check for fitness content
+        const hasFitnessKeyword = FITNESS_KEYWORDS.some(keyword => lowerUrl.includes(keyword))
+        if (hasFitnessKeyword) {
+            return {
+                platform: 'youtube',
+                contentType: 'fitness',
+                suggestedCategory: 'Fitness',
+                confidence: 'high',
+                emoji: '💪',
+                description: 'Fitness video'
+            }
+        }
+
+        // Check for tech content
+        const hasTechKeyword = TECH_KEYWORDS.some(keyword => lowerUrl.includes(keyword))
+        if (hasTechKeyword) {
+            return {
+                platform: 'youtube',
+                contentType: 'tech',
+                suggestedCategory: 'Tech & DIY',
+                confidence: 'high',
+                emoji: '🔧',
+                description: 'Tech video'
             }
         }
 
