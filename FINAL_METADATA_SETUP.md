@@ -1,32 +1,21 @@
 # Intelligent Metadata & Categorization Setup 🚀
 
-I have successfully implemented the **100% FREE** intelligent metadata and categorization system!
+I have successfully implemented the **100% FREE** intelligent metadata and categorization system with **STRICT PLATFORM SEPARATION**!
 
-## ✅ What's New?
+## ✅ Strict Categorization Rules
 
-1.  **Rich Metadata Fetching**
-    *   Fetches **actual video titles**, **channel names**, and **thumbnails**.
-    *   Uses **FREE oEmbed APIs** (YouTube & Instagram).
-    *   **No API keys** required.
-    *   Includes **web scraping fallback** if APIs fail.
+1.  **YouTube Content**
+    *   **YouTube Cricket**: Only cricket videos (IPL, World Cup, etc.)
+    *   **YouTube Music - Hindi**: Hindi/Bollywood songs.
+    *   **YouTube Music - English**: English/International songs.
+    *   **YouTube News**: News videos.
+    *   **YouTube Tech**: Tech reviews and unboxings.
+    *   **YouTube Videos**: General videos.
 
-2.  **Smart Content Categorization**
-    *   **Cricket Detection:** Identifies IPL, World Cup, Test Matches, etc.
-    *   **Music Genres:** Detects Bollywood, Hip Hop, Pop, etc.
-    *   **News Types:** Categorizes Breaking News, Politics, Tech News.
-    *   **Instagram Reels:** Detects Comedy, Dance, Food, etc.
-
-3.  **Enhanced UI**
-    *   Displays **Channel Name** and **Creator Profile**.
-    *   Shows **Subcategory Badges** (e.g., "IPL", "Bollywood").
-    *   Displays **Video Description** preview.
-    *   New **Loading Spinner** when fetching data.
-
-4.  **Background Intelligence**
-    *   **Service Worker** now fetches metadata for shared links.
-    *   Notifications show **actual title** and **channel name**.
-
----
+2.  **Instagram Content**
+    *   **Instagram Reels**: All reels.
+    *   **Instagram Reels - Comedy**: Funny reels.
+    *   **Instagram Posts**: Standard posts.
 
 ## ⚠️ IMPORTANT: Run This SQL Command
 
@@ -53,17 +42,15 @@ You can find the full SQL file at: `supabase_metadata_enhancement.sql`
 
 ## 🧪 How to Test
 
-1.  **Paste a YouTube URL:**
-    *   Try a Cricket video: `https://www.youtube.com/watch?v=...`
-    *   See it detect "Cricket - IPL" or "Cricket - World Cup".
-    *   See the Channel Name and Title appear.
+1.  **Paste a Hindi Song:**
+    *   Try a Bollywood song URL.
+    *   See it detect **"YouTube Music - Hindi"**.
 
-2.  **Paste an Instagram Reel:**
-    *   Try a funny reel.
-    *   See it detect "Instagram Reels - Comedy".
+2.  **Paste a Cricket Video:**
+    *   Try an IPL highlight.
+    *   See it detect **"YouTube Cricket"**.
 
-3.  **Share from Mobile:**
-    *   Share a video to the app.
-    *   See the notification with the real video title!
+3.  **Paste an Instagram Reel:**
+    *   See it detect **"Instagram Reels"** (never mixed with YouTube).
 
-Enjoy your new intelligent Video Vault! 🎉
+Enjoy your organized Video Vault! 🎉

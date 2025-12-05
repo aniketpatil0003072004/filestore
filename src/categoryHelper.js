@@ -47,7 +47,6 @@ export function detectCricketContent(title, description = '') {
         return {
             category: 'Cricket',
             subcategory: subcategory,
-            fullCategory: subcategory === 'Cricket' ? 'Cricket' : `Cricket - ${subcategory}`,
             confidence: 'high',
             emoji: '🏏'
         }
@@ -57,10 +56,10 @@ export function detectCricketContent(title, description = '') {
 }
 
 /**
- * Detect Music genre
+ * Detect Music genre and Language
  */
-export function detectMusicGenre(title, description = '') {
-    const text = `${title} ${description}`.toLowerCase()
+export function detectMusicGenre(title, description = '', channelName = '') {
+    const text = `${title} ${description} ${channelName}`.toLowerCase()
 
     // First check if it's music
     const musicKeywords = [
@@ -73,38 +72,19 @@ export function detectMusicGenre(title, description = '') {
 
     if (!isMusicContent) return null
 
-    // Detect genre
-    const genres = {
-        'Bollywood': ['bollywood', 'hindi song', 'indian music', 't-series', 'zee music', 'tips music'],
-        'Hip Hop': ['rap', 'hip hop', 'hiphop', 'rapper', 'trap', 'drill'],
-        'Pop': ['pop music', 'pop song', 'mainstream pop'],
-        'Rock': ['rock', 'metal', 'punk', 'alternative rock'],
-        'Classical': ['classical', 'orchestra', 'symphony', 'instrumental'],
-        'EDM': ['edm', 'electronic', 'dubstep', 'house music', 'techno', 'trance'],
-        'Devotional': ['bhajan', 'devotional', 'spiritual', 'prayer', 'aarti', 'mantra'],
-        'Punjabi': ['punjabi song', 'punjabi music', 'bhangra'],
-        'Tamil': ['tamil song', 'tamil music', 'kollywood'],
-        'Telugu': ['telugu song', 'telugu music', 'tollywood']
-    }
+    // Detect Language (Hindi vs English/Other)
+    const hindiKeywords = [
+        'hindi', 'bollywood', 't-series', 'zee', 'desi', 'punjabi',
+        'india', 'saregama', 'tips official', 'yyrf', 'badshah', 'arijit'
+    ]
 
-    for (const [genre, keywords] of Object.entries(genres)) {
-        if (keywords.some(kw => text.includes(kw))) {
-            return {
-                category: 'Music',
-                subcategory: genre,
-                fullCategory: `Music - ${genre}`,
-                confidence: 'high',
-                emoji: '🎵'
-            }
-        }
-    }
+    const isHindi = hindiKeywords.some(kw => text.includes(kw))
+    const language = isHindi ? 'Hindi' : 'English'
 
-    // Default music category
     return {
         category: 'Music',
-        subcategory: 'General',
-        fullCategory: 'Music',
-        confidence: 'medium',
+        subcategory: language, // 'Hindi' or 'English'
+        confidence: 'high',
         emoji: '🎵'
     }
 }
@@ -115,32 +95,14 @@ export function detectMusicGenre(title, description = '') {
 export function detectNewsType(title, description = '') {
     const text = `${title} ${description}`.toLowerCase()
 
-    const newsKeywords = ['news', 'breaking', 'headline', 'report', 'journalist', 'live coverage']
+    const newsKeywords = ['news', 'breaking', 'headline', 'report', 'journalist', 'live coverage', 'aaj tak', 'ndtv', 'cnn', 'bbc']
     const isNews = newsKeywords.some(kw => text.includes(kw))
 
     if (!isNews) return null
 
-    // Detect news type
-    let subcategory = 'General'
-
-    if (text.includes('breaking') || text.includes('urgent') || text.includes('alert')) {
-        subcategory = 'Breaking News'
-    } else if (text.includes('politics') || text.includes('election') || text.includes('government')) {
-        subcategory = 'Politics'
-    } else if (text.includes('sports news') || text.includes('cricket news')) {
-        subcategory = 'Sports News'
-    } else if (text.includes('tech news') || text.includes('technology news')) {
-        subcategory = 'Tech News'
-    } else if (text.includes('business') || text.includes('economy') || text.includes('market')) {
-        subcategory = 'Business'
-    } else if (text.includes('weather')) {
-        subcategory = 'Weather'
-    }
-
     return {
         category: 'News',
-        subcategory: subcategory,
-        fullCategory: subcategory === 'General' ? 'News' : `News - ${subcategory}`,
+        subcategory: 'General',
         confidence: 'high',
         emoji: '📰'
     }
@@ -158,10 +120,7 @@ export function detectInstagramReelType(title, description = '') {
         'Food': ['food', 'recipe', 'cooking', 'chef', 'foodie', 'delicious', 'tasty'],
         'Travel': ['travel', 'trip', 'vacation', 'explore', 'adventure', 'destination'],
         'Fashion': ['fashion', 'style', 'outfit', 'ootd', 'clothing', 'trendy'],
-        'Fitness': ['fitness', 'workout', 'gym', 'exercise', 'health', 'training'],
-        'Beauty': ['makeup', 'beauty', 'skincare', 'cosmetics', 'tutorial'],
-        'Tech': ['tech', 'technology', 'gadget', 'review', 'unboxing'],
-        'Motivation': ['motivation', 'inspiration', 'motivational', 'success', 'quotes']
+        'Fitness': ['fitness', 'workout', 'gym', 'exercise', 'health', 'training']
     }
 
     for (const [type, keywords] of Object.entries(contentTypes)) {
@@ -169,7 +128,6 @@ export function detectInstagramReelType(title, description = '') {
             return {
                 category: 'Instagram Reels',
                 subcategory: type,
-                fullCategory: `Instagram Reels - ${type}`,
                 confidence: 'medium',
                 emoji: '🎬'
             }
@@ -181,35 +139,101 @@ export function detectInstagramReelType(title, description = '') {
 
 /**
  * Main function: Analyze content with metadata
- * Combines URL analysis with title/description analysis
+ * ENFORCES STRICT PLATFORM SEPARATION
  */
 export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     const title = metadata?.title || ''
     const description = metadata?.description || ''
+    const channelName = metadata?.channelName || ''
+    const platform = metadata?.platform === 'youtube' ? 'YouTube' :
+        metadata?.platform === 'instagram' ? 'Instagram' : 'Other'
 
-    // Try specific content detection
-    const cricketDetection = detectCricketContent(title, description)
-    if (cricketDetection) return cricketDetection
+    // ==========================================
+    // YOUTUBE STRICT CATEGORIZATION
+    // ==========================================
+    if (platform === 'YouTube') {
+        // 1. Cricket
+        const cricketDetection = detectCricketContent(title, description)
+        if (cricketDetection) {
+            return {
+                fullCategory: 'YouTube Cricket',
+                subcategory: cricketDetection.subcategory,
+                emoji: '🏏'
+            }
+        }
 
-    const musicDetection = detectMusicGenre(title, description)
-    if (musicDetection) return musicDetection
+        // 2. Music (Hindi vs English)
+        const musicDetection = detectMusicGenre(title, description, channelName)
+        if (musicDetection) {
+            return {
+                fullCategory: `YouTube Music - ${musicDetection.subcategory}`, // "YouTube Music - Hindi"
+                subcategory: musicDetection.subcategory,
+                emoji: '🎵'
+            }
+        }
 
-    const newsDetection = detectNewsType(title, description)
-    if (newsDetection) return newsDetection
+        // 3. News
+        const newsDetection = detectNewsType(title, description)
+        if (newsDetection) {
+            return {
+                fullCategory: 'YouTube News',
+                subcategory: 'General',
+                emoji: '📰'
+            }
+        }
 
-    // For Instagram, detect reel type
-    if (url.includes('instagram.com/reel/')) {
-        const reelDetection = detectInstagramReelType(title, description)
-        if (reelDetection) return reelDetection
+        // 4. Tech
+        const techKeywords = ['tech', 'review', 'unboxing', 'phone', 'laptop', 'gadget']
+        if (techKeywords.some(kw => `${title} ${description}`.toLowerCase().includes(kw))) {
+            return {
+                fullCategory: 'YouTube Tech',
+                subcategory: 'Tech',
+                emoji: '🔧'
+            }
+        }
+
+        // 5. Default YouTube
+        return {
+            fullCategory: 'YouTube Videos',
+            subcategory: null,
+            emoji: '🎥'
+        }
     }
 
-    // Fallback to URL-based analysis
+    // ==========================================
+    // INSTAGRAM STRICT CATEGORIZATION
+    // ==========================================
+    if (platform === 'Instagram') {
+        // Reels
+        if (url.includes('/reel/')) {
+            const reelDetection = detectInstagramReelType(title, description)
+            if (reelDetection) {
+                return {
+                    fullCategory: `Instagram Reels - ${reelDetection.subcategory}`,
+                    subcategory: reelDetection.subcategory,
+                    emoji: '🎬'
+                }
+            }
+            return {
+                fullCategory: 'Instagram Reels',
+                subcategory: null,
+                emoji: '🎬'
+            }
+        }
+
+        // Posts
+        return {
+            fullCategory: 'Instagram Posts',
+            subcategory: null,
+            emoji: '📸'
+        }
+    }
+
+    // Fallback
     return {
-        category: urlAnalysis?.suggestedCategory || 'Videos',
-        subcategory: null,
         fullCategory: urlAnalysis?.suggestedCategory || 'Videos',
-        confidence: urlAnalysis?.confidence || 'low',
-        emoji: urlAnalysis?.emoji || '🎥'
+        subcategory: null,
+        emoji: urlAnalysis?.emoji || '🔗'
     }
 }
 
@@ -218,17 +242,15 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
  */
 export function getAllCategories() {
     return [
-        { name: 'Cricket', emoji: '🏏', subcategories: ['IPL', 'World Cup', 'Test Match', 'T20', 'ODI', 'Highlights'] },
-        { name: 'Music', emoji: '🎵', subcategories: ['Bollywood', 'Hip Hop', 'Pop', 'Rock', 'Classical', 'EDM', 'Devotional'] },
-        { name: 'News', emoji: '📰', subcategories: ['Breaking News', 'Politics', 'Sports News', 'Tech News', 'Business'] },
-        { name: 'Instagram Reels', emoji: '🎬', subcategories: ['Comedy', 'Dance', 'Food', 'Travel', 'Fashion', 'Fitness'] },
-        { name: 'Education', emoji: '📚', subcategories: ['Programming', 'Science', 'Tutorial'] },
-        { name: 'YouTube Videos', emoji: '🎥', subcategories: [] },
-        { name: 'YouTube Shorts', emoji: '⚡', subcategories: [] },
-        { name: 'Podcasts', emoji: '🎙️', subcategories: [] },
-        { name: 'Gaming', emoji: '🎮', subcategories: [] },
-        { name: 'Cooking', emoji: '🍳', subcategories: [] },
-        { name: 'Fitness', emoji: '💪', subcategories: [] },
-        { name: 'Tech & DIY', emoji: '🔧', subcategories: [] }
+        { name: 'YouTube Cricket', emoji: '🏏' },
+        { name: 'YouTube Music - Hindi', emoji: '🎵' },
+        { name: 'YouTube Music - English', emoji: '🎵' },
+        { name: 'YouTube News', emoji: '📰' },
+        { name: 'YouTube Tech', emoji: '🔧' },
+        { name: 'YouTube Videos', emoji: '🎥' },
+        { name: 'Instagram Reels', emoji: '🎬' },
+        { name: 'Instagram Posts', emoji: '📸' }
     ]
 }
+
+

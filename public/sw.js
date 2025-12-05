@@ -530,39 +530,103 @@ async function scrapeInstagramMetadata(url) {
 function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     const title = metadata?.title || ''
     const description = metadata?.description || ''
-    const text = `${title} ${description}`.toLowerCase()
+    const channelName = metadata?.channelName || ''
+    const text = `${title} ${description} ${channelName}`.toLowerCase()
 
-    // Cricket Detection
-    const cricketKeywords = ['cricket', 'ipl', 'world cup', 'test match', 'odi', 't20', 'india vs']
-    if (cricketKeywords.filter(kw => text.includes(kw)).length >= 1) {
-        let sub = 'Cricket'
-        if (text.includes('ipl')) sub = 'IPL'
-        else if (text.includes('world cup')) sub = 'World Cup'
-        else if (text.includes('test match')) sub = 'Test Match'
+    const platform = metadata?.platform === 'youtube' ? 'YouTube' :
+        metadata?.platform === 'instagram' ? 'Instagram' : 'Other'
+
+    // ==========================================
+    // YOUTUBE STRICT CATEGORIZATION
+    // ==========================================
+    if (platform === 'YouTube') {
+        // 1. Cricket
+        const cricketKeywords = ['cricket', 'ipl', 'test match', 'odi', 't20', 'world cup', 'india vs', 'highlight']
+        if (cricketKeywords.some(kw => text.includes(kw))) {
+            let sub = 'Cricket'
+            if (text.includes('ipl')) sub = 'IPL'
+            else if (text.includes('world cup')) sub = 'World Cup'
+
+            return {
+                fullCategory: 'YouTube Cricket',
+                subcategory: sub
+            }
+        }
+
+        // 2. Music (Hindi vs English)
+        const musicKeywords = ['music', 'song', 'official', 'vevo', 'lyrics', 'video']
+        if (musicKeywords.some(kw => text.includes(kw))) {
+            const hindiKeywords = ['hindi', 'bollywood', 't-series', 'zee', 'desi', 'punjabi', 'badshah', 'arijit']
+            const isHindi = hindiKeywords.some(kw => text.includes(kw))
+            const lang = isHindi ? 'Hindi' : 'English'
+
+            return {
+                fullCategory: `YouTube Music - ${lang}`,
+                subcategory: lang
+            }
+        }
+
+        // 3. News
+        const newsKeywords = ['news', 'breaking', 'headline', 'report', 'live']
+        if (newsKeywords.some(kw => text.includes(kw))) {
+            return {
+                fullCategory: 'YouTube News',
+                subcategory: 'General'
+            }
+        }
+
+        // 4. Tech
+        const techKeywords = ['tech', 'review', 'unboxing', 'phone', 'gadget']
+        if (techKeywords.some(kw => text.includes(kw))) {
+            return {
+                fullCategory: 'YouTube Tech',
+                subcategory: 'Tech'
+            }
+        }
 
         return {
-            fullCategory: sub === 'Cricket' ? 'Cricket' : `Cricket - ${sub}`,
-            subcategory: sub
+            fullCategory: 'YouTube Videos',
+            subcategory: null
         }
     }
 
-    // Music Detection
-    const musicKeywords = ['music', 'song', 'official', 'vevo', 'lyrics']
-    if (musicKeywords.some(kw => text.includes(kw))) {
-        let sub = 'General'
-        if (text.includes('bollywood') || text.includes('hindi')) sub = 'Bollywood'
-        else if (text.includes('hip hop') || text.includes('rap')) sub = 'Hip Hop'
+    // ==========================================
+    // INSTAGRAM STRICT CATEGORIZATION
+    // ==========================================
+    if (platform === 'Instagram') {
+        if (url.includes('/reel/')) {
+            // Detect Reel Type
+            const types = {
+                'Comedy': ['comedy', 'funny', 'meme', 'laugh'],
+                'Dance': ['dance', 'dancing', 'moves'],
+                'Food': ['food', 'cooking', 'recipe', 'tasty']
+            }
+
+            let sub = null
+            for (const [type, kws] of Object.entries(types)) {
+                if (kws.some(kw => text.includes(kw))) {
+                    sub = type
+                    break
+                }
+            }
+
+            if (sub) {
+                return {
+                    fullCategory: `Instagram Reels - ${sub}`,
+                    subcategory: sub
+                }
+            }
+
+            return {
+                fullCategory: 'Instagram Reels',
+                subcategory: null
+            }
+        }
 
         return {
-            fullCategory: sub === 'General' ? 'Music' : `Music - ${sub}`,
-            subcategory: sub
+            fullCategory: 'Instagram Posts',
+            subcategory: null
         }
-    }
-
-    // News Detection
-    const newsKeywords = ['news', 'breaking', 'headline']
-    if (newsKeywords.some(kw => text.includes(kw))) {
-        return { fullCategory: 'News', subcategory: 'General' }
     }
 
     return {
