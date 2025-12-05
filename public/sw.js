@@ -4,8 +4,10 @@
 const CACHE_NAME = 'video-vault-v2'
 const DB_NAME = 'video-vault-db'
 const DB_VERSION = 1
-const SUPABASE_URL = 'https://your-project.supabase.co' // Will be replaced dynamically
-const SUPABASE_KEY = 'your-anon-key' // Will be replaced dynamically
+
+// Supabase config - will be set by main app via postMessage
+let SUPABASE_URL = ''
+let SUPABASE_KEY = ''
 
 const urlsToCache = [
     '/',
@@ -101,11 +103,8 @@ async function handleShareTarget(request) {
                 requireInteraction: false
             })
 
-            // Return empty response (don't open app)
-            return new Response(null, {
-                status: 200,
-                headers: { 'Content-Type': 'text/plain' }
-            })
+            // Redirect to saved.html which auto-closes
+            return Response.redirect('/saved.html', 303)
 
         } catch (error) {
             console.error('Background save error:', error)
@@ -126,6 +125,7 @@ async function handleShareTarget(request) {
         return Response.redirect('/', 303)
     }
 }
+
 
 // ========== INDEXEDDB - Get Token ==========
 function getTokenFromDB() {
@@ -394,24 +394,20 @@ function extractVideoId(url) {
 
 // ========== GET SUPABASE CONFIG ==========
 async function getSupabaseUrl() {
-    // Try to get from cache or use environment
-    return SUPABASE_URL !== 'https://your-project.supabase.co'
-        ? SUPABASE_URL
-        : 'https://your-project.supabase.co' // Replace with actual URL
+    return SUPABASE_URL
 }
 
 async function getSupabaseKey() {
-    // Try to get from cache or use environment
-    return SUPABASE_KEY !== 'your-anon-key'
-        ? SUPABASE_KEY
-        : 'your-anon-key' // Replace with actual key
+    return SUPABASE_KEY
 }
 
 // ========== MESSAGE HANDLER ==========
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SUPABASE_CONFIG') {
         // Store Supabase config when sent from main app
-        self.SUPABASE_URL = event.data.url
-        self.SUPABASE_KEY = event.data.key
+        SUPABASE_URL = event.data.url
+        SUPABASE_KEY = event.data.key
+        console.log('Supabase config received in Service Worker')
     }
 })
+
