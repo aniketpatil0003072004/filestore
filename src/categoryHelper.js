@@ -1,14 +1,40 @@
 /**
  * Smart Content Categorization Helper
  * Analyzes video titles and descriptions to detect:
- * - Cricket (IPL, World Cup, Test Match, etc.)
+ * - Sports (Cricket, Football, NBA, etc.)
  * - Music genres (Bollywood, Hip Hop, Pop, etc.)
  * - News types (Breaking, Politics, Sports, etc.)
  * - Instagram content types (Comedy, Dance, Food, etc.)
  */
 
 /**
- * Detect Cricket content and subcategory
+ * Detect Sports content (General)
+ */
+export function detectSportsContent(title, description = '') {
+    const text = `${title} ${description}`.toLowerCase()
+
+    const sportsKeywords = [
+        'sports', 'football', 'soccer', 'tennis', 'basketball', 'nba', 'fifa',
+        'badminton', 'hockey', 'volleyball', 'athlete', 'championship',
+        'tournament', 'olympics', 'wwe', 'ufc', 'boxing', 'wrestling',
+        'cricket', 'ipl', 'test match', 'odi', 't20', 'wicket', 'century',
+        'messi', 'ronaldo', 'virat kohli', 'dhoni', 'rohit sharma', 'neymar'
+    ]
+
+    if (sportsKeywords.some(kw => text.includes(kw))) {
+        return {
+            category: 'Sports',
+            subcategory: 'General',
+            confidence: 'high',
+            emoji: '🏅'
+        }
+    }
+
+    return null
+}
+
+/**
+ * Detect Cricket content and subcategory (Specialized)
  */
 export function detectCricketContent(title, description = '') {
     const text = `${title} ${description}`.toLowerCase()
@@ -65,7 +91,8 @@ export function detectMusicGenre(title, description = '', channelName = '') {
     const musicKeywords = [
         'music', 'song', 'audio', 'official', 'vevo', 'lyrics',
         'album', 'single', 'mv', 'music video', 'soundtrack',
-        'remix', 'cover', 'acoustic', 'live performance', 'concert'
+        'remix', 'cover', 'acoustic', 'live performance', 'concert',
+        'lofi', 'hip hop', 'rap', 'pop'
     ]
 
     const isMusicContent = musicKeywords.some(kw => text.includes(kw))
@@ -73,12 +100,17 @@ export function detectMusicGenre(title, description = '', channelName = '') {
     if (!isMusicContent) return null
 
     // Detect Language (Hindi vs English/Other)
+    // Check for Devanagari script (Hindi/Sanskrit/Marathi/etc)
+    const hasDevanagari = /[\u0900-\u097F]/.test(title) || /[\u0900-\u097F]/.test(description)
+
     const hindiKeywords = [
         'hindi', 'bollywood', 't-series', 'zee', 'desi', 'punjabi',
-        'india', 'saregama', 'tips official', 'yyrf', 'badshah', 'arijit'
+        'india', 'saregama', 'tips official', 'yyrf', 'badshah', 'arijit',
+        'jubin', 'neha kakkar', 'shreya ghoshal', 'kumar sanu', 'udit narayan',
+        'alka yagnik', 'sonu nigam', 'kishore kumar', 'lata mangeshkar'
     ]
 
-    const isHindi = hindiKeywords.some(kw => text.includes(kw))
+    const isHindi = hasDevanagari || hindiKeywords.some(kw => text.includes(kw))
     const language = isHindi ? 'Hindi' : 'English'
 
     return {
@@ -115,6 +147,7 @@ export function detectInstagramReelType(title, description = '') {
     const text = `${title} ${description}`.toLowerCase()
 
     const contentTypes = {
+        'Sports': ['sports', 'football', 'cricket', 'messi', 'ronaldo', 'ipl', 'nba', 'goal', 'match', 'athlete'],
         'Comedy': ['comedy', 'funny', 'humor', 'laugh', 'joke', 'meme', 'hilarious'],
         'Dance': ['dance', 'dancing', 'choreography', 'dancer', 'moves'],
         'Food': ['food', 'recipe', 'cooking', 'chef', 'foodie', 'delicious', 'tasty'],
@@ -155,6 +188,15 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     if (platform === 'YouTube') {
         // 0. YouTube Shorts (Strict Check)
         if (url.includes('/shorts/')) {
+            // Check for sports in shorts
+            const sportsDetection = detectSportsContent(title, description)
+            if (sportsDetection) {
+                return {
+                    fullCategory: 'YouTube Sports',
+                    subcategory: 'Shorts',
+                    emoji: '🏅'
+                }
+            }
             return {
                 fullCategory: 'YouTube Shorts',
                 subcategory: null,
@@ -162,13 +204,14 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
             }
         }
 
-        // 1. Cricket
-        const cricketDetection = detectCricketContent(title, description)
-        if (cricketDetection) {
+        // 1. Sports (Including Cricket)
+        // User explicitly asked for "Youtube Sports"
+        const sportsDetection = detectSportsContent(title, description)
+        if (sportsDetection) {
             return {
-                fullCategory: 'YouTube Cricket',
-                subcategory: cricketDetection.subcategory,
-                emoji: '🏏'
+                fullCategory: 'YouTube Sports',
+                subcategory: sportsDetection.subcategory,
+                emoji: '🏅'
             }
         }
 
@@ -217,6 +260,16 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
         // Reels
         if (url.includes('/reel/')) {
             const reelDetection = detectInstagramReelType(title, description)
+
+            // Special case for Sports as requested
+            if (reelDetection && reelDetection.subcategory === 'Sports') {
+                return {
+                    fullCategory: 'Instagram Sports',
+                    subcategory: 'Reels',
+                    emoji: '🏅'
+                }
+            }
+
             if (reelDetection) {
                 return {
                     fullCategory: `Instagram Reels - ${reelDetection.subcategory}`,
@@ -252,7 +305,8 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
  */
 export function getAllCategories() {
     return [
-        { name: 'YouTube Cricket', emoji: '🏏' },
+        { name: 'YouTube Sports', emoji: '🏅' },
+        { name: 'Instagram Sports', emoji: '🏅' },
         { name: 'YouTube Music - Hindi', emoji: '🎵' },
         { name: 'YouTube Music - English', emoji: '🎵' },
         { name: 'YouTube News', emoji: '📰' },
@@ -262,5 +316,3 @@ export function getAllCategories() {
         { name: 'Instagram Posts', emoji: '📸' }
     ]
 }
-
-

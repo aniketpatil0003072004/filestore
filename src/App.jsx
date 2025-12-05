@@ -415,37 +415,38 @@ function App() {
     <div className="app-container">
       <header className="header">
         <h1 className="title">Video Vault</h1>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          {showInstallButton && (
-            <button
-              className="add-btn"
-              onClick={handleInstallClick}
-              style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
-            >
-              📱 Install App
-            </button>
-          )}
+      </header>
+
+      <div className="control-bar">
+        {showInstallButton && (
           <button
             className="add-btn"
-            onClick={toggleAutoSave}
-            style={{
-              background: autoSaveMode
-                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-              minWidth: '140px'
-            }}
-            title={autoSaveMode ? 'Auto-save ON' : 'Manual mode ON'}
+            onClick={handleInstallClick}
+            style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
           >
-            {autoSaveMode ? '⚡ Auto-Save' : '📝 Manual'}
+            📱 Install App
           </button>
-          <button className="add-btn" onClick={() => setIsModalOpen(true)}>
-            + Add Item
-          </button>
-          <button className="signout-btn" onClick={handleSignOut}>
-            Sign Out
-          </button>
-        </div>
-      </header>
+        )}
+        <button
+          className="add-btn"
+          onClick={toggleAutoSave}
+          style={{
+            background: autoSaveMode
+              ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+              : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+            minWidth: '140px'
+          }}
+          title={autoSaveMode ? 'Auto-save ON' : 'Manual mode ON'}
+        >
+          {autoSaveMode ? '⚡ Auto-Save' : '📝 Manual'}
+        </button>
+        <button className="add-btn" onClick={() => setIsModalOpen(true)}>
+          + Add Item
+        </button>
+        <button className="signout-btn" onClick={handleSignOut}>
+          Sign Out
+        </button>
+      </div>
 
       <div className="categories">
         {categories.map(cat => (
