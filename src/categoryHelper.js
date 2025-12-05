@@ -89,13 +89,22 @@ export function detectMusicGenre(title, description = '', channelName = '') {
 
     // First check if it's music
     const musicKeywords = [
-        'music', 'song', 'audio', 'official', 'vevo', 'lyrics',
-        'album', 'single', 'mv', 'music video', 'soundtrack',
-        'remix', 'cover', 'acoustic', 'live performance', 'concert',
-        'lofi', 'hip hop', 'rap', 'pop'
+        'music', 'song', 'audio', 'official', 'vevo', 'lyrics', 'lyrical',
+        'album', 'single', 'mv', 'music video', 'video song', 'full song',
+        'soundtrack', 'ost', 'bgm', 'remix', 'cover', 'acoustic',
+        'live performance', 'concert', 'lofi', 'hip hop', 'rap', 'pop',
+        'jukebox', 'playlist'
     ]
 
-    const isMusicContent = musicKeywords.some(kw => text.includes(kw))
+    // Known Music Labels (to catch songs without "song" in title)
+    const musicLabels = [
+        't-series', 'zee music', 'sony music', 'anand audio', 'lahari music',
+        'aditya music', 'saregama', 'speed records', 'bangla music',
+        'think music', 'tips official', 'yrf', 'hybe', 'jyp', 'sm town'
+    ]
+
+    const isMusicContent = musicKeywords.some(kw => text.includes(kw)) ||
+        musicLabels.some(label => text.includes(label))
 
     if (!isMusicContent) return null
 
@@ -127,8 +136,17 @@ export function detectMusicGenre(title, description = '', channelName = '') {
 export function detectNewsType(title, description = '') {
     const text = `${title} ${description}`.toLowerCase()
 
-    const newsKeywords = ['news', 'breaking', 'headline', 'report', 'journalist', 'live coverage', 'aaj tak', 'ndtv', 'cnn', 'bbc']
-    const isNews = newsKeywords.some(kw => text.includes(kw))
+    // Use Regex for stricter word boundary matching on common words
+    const strictNewsKeywords = [
+        /\bnews\b/, /\bbreaking\b/, /\bheadline\b/, /\bheadlines\b/,
+        /\breport\b/, /\breporter\b/, /\bjournalist\b/, /\blive coverage\b/
+    ]
+
+    // Specific channels or unique phrases can remain as string includes
+    const newsChannels = ['aaj tak', 'ndtv', 'cnn', 'bbc', 'fox news', 'al jazeera', 'india today', 'republic world']
+
+    const isNews = strictNewsKeywords.some(regex => regex.test(text)) ||
+        newsChannels.some(kw => text.includes(kw))
 
     if (!isNews) return null
 
