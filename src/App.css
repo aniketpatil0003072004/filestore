@@ -12,13 +12,16 @@
 }
 
 .title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+  font-size: 3rem;
+  font-weight: 800;
+  background: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0;
+  text-align: center;
+  letter-spacing: -1px;
+  text-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
 }
 
 .add-btn {
@@ -427,4 +430,118 @@
   overflow: hidden;
   line-height: 1.4;
   opacity: 0.8;
+}
+
+/* NEW DESIGN STYLES */
+
+.signout-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+}
+
+.signout-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+}
+
+.thumbnail-badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.badge-group-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.video-category-badge {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.subcategory-badge-overlay {
+  background: rgba(99, 102, 241, 0.9);
+  /* Indigo accent */
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.platform-badge-overlay {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: all 0.3s ease;
+  color: white;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.video-thumbnail:hover .play-overlay {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.play-overlay svg {
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+  transform: scale(0.9);
+  transition: transform 0.2s;
+}
+
+.video-thumbnail:hover .play-overlay svg {
+  transform: scale(1.1);
+}
+
+.channel-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.channel-link:hover {
+  color: var(--accent-primary);
+  text-decoration: underline;
 }

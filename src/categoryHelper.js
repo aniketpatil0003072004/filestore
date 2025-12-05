@@ -118,7 +118,8 @@ export function detectInstagramReelType(title, description = '') {
         'Comedy': ['comedy', 'funny', 'humor', 'laugh', 'joke', 'meme', 'hilarious'],
         'Dance': ['dance', 'dancing', 'choreography', 'dancer', 'moves'],
         'Food': ['food', 'recipe', 'cooking', 'chef', 'foodie', 'delicious', 'tasty'],
-        'Travel': ['travel', 'trip', 'vacation', 'explore', 'adventure', 'destination'],
+        'Politics': ['politics', 'election', 'vote', 'minister', 'modi', 'bjp', 'congress', 'news', 'speech', 'rally'],
+        'Travel': ['travel', 'vacation', 'explore', 'adventure', 'destination', 'tourism', 'trip'],
         'Fashion': ['fashion', 'style', 'outfit', 'ootd', 'clothing', 'trendy'],
         'Fitness': ['fitness', 'workout', 'gym', 'exercise', 'health', 'training']
     }
@@ -152,6 +153,15 @@ export function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     // YOUTUBE STRICT CATEGORIZATION
     // ==========================================
     if (platform === 'YouTube') {
+        // 0. YouTube Shorts (Strict Check)
+        if (url.includes('/shorts/')) {
+            return {
+                fullCategory: 'YouTube Shorts',
+                subcategory: null,
+                emoji: '⚡'
+            }
+        }
+
         // 1. Cricket
         const cricketDetection = detectCricketContent(title, description)
         if (cricketDetection) {

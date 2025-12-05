@@ -342,6 +342,9 @@ function App() {
       if (error) throw error
 
       setItems([data[0], ...items])
+      // Force refresh from server to ensure strict order
+      fetchItems()
+
       setFormData({ url: '', title: '', category: '', notes: '' })
       setSelectedFile(null)
       setUrlAnalysis(null) // Reset URL analysis
@@ -363,6 +366,8 @@ function App() {
 
         if (error) throw error
         setItems(items.filter(i => i.id !== id))
+        // Force refresh
+        fetchItems()
       } catch (error) {
         alert('Error deleting item: ' + error.message)
       }
@@ -436,7 +441,7 @@ function App() {
           <button className="add-btn" onClick={() => setIsModalOpen(true)}>
             + Add Item
           </button>
-          <button className="cancel-btn" onClick={handleSignOut}>
+          <button className="signout-btn" onClick={handleSignOut}>
             Sign Out
           </button>
         </div>
@@ -482,24 +487,29 @@ function App() {
                   </div>
                 )}
 
+                {/* Badges Overlay */}
+                <div className="thumbnail-badges">
+                  <div className="badge-group-left">
+                    <span className="video-category-badge">{item.category || 'Uncategorized'}</span>
+                    {item.subcategory && (
+                      <span className="subcategory-badge-overlay">
+                        {item.subcategory}
+                      </span>
+                    )}
+                  </div>
+                  {item.platform_category && (
+                    <span className="platform-badge-overlay">
+                      {item.platform_category === 'youtube' ? '▶️' : item.platform_category === 'instagram' ? '📸' : ''}
+                    </span>
+                  )}
+                </div>
+
                 {item.type === 'video' && (
                   <a
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: 'rgba(0,0,0,0.3)',
-                      opacity: 0,
-                      transition: 'opacity 0.2s',
-                      color: 'white'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                    onMouseLeave={e => e.currentTarget.style.opacity = 0}
+                    className="play-overlay"
                   >
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="12" r="10" />
@@ -510,54 +520,22 @@ function App() {
               </div>
 
               <div className="video-info">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.25rem' }}>
-                  <div className="category-badges" style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                    <span className="video-category">{item.category || 'Uncategorized'}</span>
-                    {item.subcategory && (
-                      <span className="subcategory-badge" style={{
-                        fontSize: '0.7rem',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '12px',
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-color)',
-                        color: 'var(--text-secondary)'
-                      }}>
-                        {item.subcategory}
-                      </span>
-                    )}
-                  </div>
-                  {item.platform_category && (
-                    <span className="platform-badge" style={{ fontSize: '1rem' }}>
-                      {item.platform_category === 'youtube' ? '▶️' : item.platform_category === 'instagram' ? '📸' : ''}
-                    </span>
-                  )}
-                </div>
-
-                <h3 className="video-title">{item.title || (item.type === 'video' ? 'Untitled Video' : 'Untitled Note')}</h3>
+                <h3 className="video-title">
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                    {item.title || (item.type === 'video' ? 'Untitled Video' : 'Untitled Note')}
+                  </a>
+                </h3>
 
                 {item.channel_name && (
-                  <div className="creator-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    <span>📺 {item.channel_name}</span>
-                    {item.creator_profile && (
-                      <a href={item.creator_profile} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
-                        View Profile
+                  <div className="creator-info">
+                    {item.creator_profile ? (
+                      <a href={item.creator_profile} target="_blank" rel="noopener noreferrer" className="channel-link">
+                        📺 {item.channel_name}
                       </a>
+                    ) : (
+                      <span>📺 {item.channel_name}</span>
                     )}
                   </div>
-                )}
-
-                {item.content_description && (
-                  <p className="video-description" style={{
-                    fontSize: '0.8rem',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '0.5rem',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}>
-                    {item.content_description}
-                  </p>
                 )}
 
                 <p className="video-notes">{item.notes}</p>

@@ -540,6 +540,14 @@ function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
     // YOUTUBE STRICT CATEGORIZATION
     // ==========================================
     if (platform === 'YouTube') {
+        // 0. YouTube Shorts (Strict Check)
+        if (url.includes('/shorts/')) {
+            return {
+                fullCategory: 'YouTube Shorts',
+                subcategory: null
+            }
+        }
+
         // 1. Cricket
         const cricketKeywords = ['cricket', 'ipl', 'test match', 'odi', 't20', 'world cup', 'india vs', 'highlight']
         if (cricketKeywords.some(kw => text.includes(kw))) {
@@ -599,7 +607,11 @@ function analyzeContentWithMetadata(url, metadata, urlAnalysis) {
             const types = {
                 'Comedy': ['comedy', 'funny', 'meme', 'laugh'],
                 'Dance': ['dance', 'dancing', 'moves'],
-                'Food': ['food', 'cooking', 'recipe', 'tasty']
+                'Food': ['food', 'cooking', 'recipe', 'tasty'],
+                'Politics': ['politics', 'election', 'vote', 'minister', 'modi', 'bjp', 'congress', 'news', 'speech', 'rally'],
+                'Travel': ['travel', 'vacation', 'explore', 'adventure', 'destination', 'tourism', 'trip'],
+                'Fashion': ['fashion', 'style', 'outfit', 'ootd', 'clothing', 'trendy'],
+                'Fitness': ['fitness', 'workout', 'gym', 'exercise', 'health', 'training']
             }
 
             let sub = null
