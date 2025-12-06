@@ -356,25 +356,35 @@ function App() {
           category: formData.category,
           notes: formData.notes,
           title: finalTitle,
+          // Trust form data for editable fields
+          channel_name: formData.channelName,
+
           // Keep existing image if not replaced
           image_url: imageUrl || editingItem.image_url || enrichedMetadata?.thumbnail || null,
           thumbnail_url: enrichedMetadata?.thumbnail || editingItem.thumbnail_url || null,
-          channel_name: formData.channelName || enrichedMetadata?.channelName || editingItem.channel_name || null,
+
+          // Metadata fallbacks
           creator_profile: enrichedMetadata?.creatorProfile || editingItem.creator_profile || null,
           content_description: enrichedMetadata?.description || editingItem.content_description || null,
           metadata: enrichedMetadata || editingItem.metadata || null
         }
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('items')
           .update(updates)
           .eq('id', editingItem.id)
           .eq('user_token', sessionToken)
+          .select()
 
         if (error) throw error
 
-        // Update local state
-        setItems(items.map(i => i.id === editingItem.id ? { ...i, ...updates } : i))
+        if (!data || data.length === 0) {
+          throw new Error("Update failed! Item not found or you don't have permission.")
+        }
+
+        // Update local state with the CONFIRMED data from server
+        const updatedItem = data[0]
+        setItems(items.map(i => i.id === editingItem.id ? updatedItem : i))
 
         setToastEmoji('✏️')
         setToastMessage('Item updated!')
@@ -408,8 +418,6 @@ function App() {
         setItems([data[0], ...items])
       } // End if/else for Create/Update
 
-      // Force refresh from server to ensure strict order
-      fetchItems()
       setFormData({ url: '', title: '', category: '', notes: '', channelName: '' })
       setSelectedFile(null)
       setUrlAnalysis(null) // Reset URL analysis
