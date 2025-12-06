@@ -373,7 +373,6 @@ function App() {
           .from('items')
           .update(updates)
           .eq('id', editingItem.id)
-          .eq('user_token', sessionToken)
           .select()
 
         if (error) throw error
