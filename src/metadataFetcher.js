@@ -193,16 +193,70 @@ async function scrapeInstagramMetadata(url) {
         const html = await response.text()
 
         // Extract Open Graph meta tags
-        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/)
+        let titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/)
         const descMatch = html.match(/<meta property="og:description" content="([^"]+)"/)
         const thumbMatch = html.match(/<meta property="og:image" content="([^"]+)"/)
 
+        // FALLBACK: If og:title missing, try <title> tag
+        let rawTitle = titleMatch?.[1] || ''
+        if (!rawTitle) {
+            const pageTitleMatch = html.match(/<title>([^<]+)<\/title>/)
+            if (pageTitleMatch) rawTitle = pageTitleMatch[1] // e.g. "Name (@user) • Instagram photos and videos"
+        }
+
+        // Parse Author and Caption
+        let channelName = 'Unknown User'
+        let title = 'Instagram Post'
+        const rawDesc = descMatch?.[1] || ''
+
+        // Format 1: "Name (@username) on Instagram: 'Caption'" (OG Title)
+        // Format 2: "Name (@username) • Instagram photos and videos" (Page Title)
+
+        // Try matching standard "Name (@handle)" pattern
+        const authorMatch = rawTitle.match(/^(.+?) \(@(.+?)\)/)
+
+        if (authorMatch) {
+            channelName = authorMatch[1] // Real Name
+            // If caption exists in title
+            if (rawTitle.includes(': "')) {
+                title = rawTitle.split(': "')[1].replace(/"$/, '')
+            } else if (rawTitle.includes(": '")) {
+                title = rawTitle.split(": '")[1].replace(/'$/, '')
+            }
+        }
+
+        // Fallback: Try getting author from description if title failed
+        if (channelName === 'Unknown User' && rawDesc) {
+            const parts = rawDesc.split(' on Instagram: ')
+            if (parts.length > 1) {
+                // "100 likes, 5 comments - username on Instagram: ..."
+                const userPart = parts[0].split('-').pop().trim()
+                if (userPart) channelName = userPart
+            } else {
+                // Try looking for just "username on Instagram"
+                const userMatch = rawDesc.match(/([A-Za-z0-9_.]+) on Instagram/);
+                if (userMatch) channelName = userMatch[1];
+            }
+        }
+
+        // Use extracted title as the "Note" or Title if it's not generic
+        if (title === 'Instagram Post' && rawDesc) {
+            // Clean description (remove stats like "10K Likes, 50 Comments - ...")
+            const pureDescParts = rawDesc.split('Instagram: "')
+            if (pureDescParts.length > 1) {
+                title = pureDescParts[1].replace(/"$/, '')
+            }
+        }
+
+        // Limit title length
+        if (title.length > 60) title = title.substring(0, 57) + '...'
+
         return {
-            title: titleMatch?.[1] || 'Instagram Post',
-            channelName: descMatch?.[1]?.split(' • ')?.[0] || 'Unknown User',
+            title: title,
+            channelName: channelName,
             creatorProfile: url,
             thumbnail: thumbMatch?.[1] || '',
-            description: descMatch?.[1] || '',
+            description: rawDesc,
             platform: 'instagram',
             success: true
         }

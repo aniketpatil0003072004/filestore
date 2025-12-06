@@ -513,11 +513,58 @@ async function scrapeInstagramMetadata(url) {
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
         const response = await fetch(proxyUrl)
         const html = await response.text()
-        const title = html.match(/<meta property="og:title" content="([^"]+)"/)?.[1]
-        const thumb = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1]
+
+        // Extract Open Graph meta tags
+        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/)
+        const descMatch = html.match(/<meta property="og:description" content="([^"]+)"/)
+        const thumbMatch = html.match(/<meta property="og:image" content="([^"]+)"/)
+
+        // Parse Author and Caption
+        let channelName = 'Unknown User'
+        let title = 'Instagram Post'
+        const rawTitle = titleMatch?.[1] || ''
+        const rawDesc = descMatch?.[1] || ''
+
+        // Format 1: "Name (@username) on Instagram: 'Caption'"
+        const authorMatch = rawTitle.match(/^(.+?) \(@(.+?)\) on Instagram/)
+        if (authorMatch) {
+            channelName = authorMatch[1] // Real Name
+            // If caption exists in title
+            if (rawTitle.includes(': "')) {
+                title = rawTitle.split(': "')[1].replace(/"$/, '')
+            } else if (rawTitle.includes(": '")) {
+                title = rawTitle.split(": '")[1].replace(/'$/, '')
+            }
+        }
+
+        // Fallback: Try getting author from description if title failed
+        if (channelName === 'Unknown User' && rawDesc) {
+            const parts = rawDesc.split(' on Instagram: ')
+            if (parts.length > 1) {
+                // "100 likes, 5 comments - username on Instagram: ..."
+                const userPart = parts[0].split('-').pop().trim()
+                if (userPart) channelName = userPart
+            }
+        }
+
+        // Use extracted title as the "Note" or Title if it's not generic
+        if (title === 'Instagram Post' && rawDesc) {
+            // Clean description (remove stats like "10K Likes, 50 Comments - ...")
+            const pureDescParts = rawDesc.split('Instagram: "')
+            if (pureDescParts.length > 1) {
+                title = pureDescParts[1].replace(/"$/, '')
+            }
+        }
+
+        // Limit title length
+        if (title.length > 60) title = title.substring(0, 57) + '...'
+
         return {
-            title: title || 'Instagram Post',
-            thumbnail: thumb || '',
+            title: title,
+            channelName: channelName,
+            creatorProfile: url,
+            thumbnail: thumbMatch?.[1] || '',
+            description: rawDesc, // Keep full description just in case
             platform: 'instagram',
             success: true
         }

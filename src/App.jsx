@@ -14,6 +14,7 @@ function App() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState(null) // Track item being edited
   const [activeCategory, setActiveCategory] = useState('All')
   const [uploading, setUploading] = useState(false)
   const [fetchingMetadata, setFetchingMetadata] = useState(false)
@@ -35,7 +36,8 @@ function App() {
     url: '',
     title: '',
     category: '',
-    notes: ''
+    notes: '',
+    channelName: '' // Added editable channel name
   })
   const [selectedFile, setSelectedFile] = useState(null)
   const [urlAnalysis, setUrlAnalysis] = useState(null) // Smart URL detection result
@@ -281,6 +283,34 @@ function App() {
     }
   }
 
+  const handleEdit = (item) => {
+    setEditingItem(item)
+    setItemType(item.type)
+    setFormData({
+      url: item.url || '',
+      title: item.title || '',
+      category: item.category || '',
+      notes: item.notes || '',
+      channelName: item.channel_name || ''
+    })
+
+    // Set metadata for preview if available
+    if (item.metadata) {
+      setEnrichedMetadata(item.metadata)
+    } else {
+      // Mock metadata from item fields if original metadata json is missing
+      setEnrichedMetadata({
+        title: item.title,
+        thumbnail: item.thumbnail_url || item.image_url,
+        channelName: item.channel_name,
+        creatorProfile: item.creator_profile,
+        description: item.content_description
+      })
+    }
+
+    setIsModalOpen(true)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (itemType === 'video' && !formData.url) return
@@ -307,7 +337,7 @@ function App() {
         imageUrl = publicUrl
       }
 
-      // Auto-generate title if empty
+      // Auto-generate title if empty (Common definition)
       let finalTitle = formData.title
       if (!finalTitle || finalTitle.trim() === '') {
         if (itemType === 'video') {
@@ -318,34 +348,69 @@ function App() {
         }
       }
 
-      const newItem = {
-        user_token: sessionToken, // Link to our token
-        type: itemType,
-        ...formData,
-        title: finalTitle,
-        image_url: imageUrl || enrichedMetadata?.thumbnail || null,
-        channel_name: enrichedMetadata?.channelName || null,
-        creator_profile: enrichedMetadata?.creatorProfile || null,
-        content_description: enrichedMetadata?.description || null,
-        thumbnail_url: enrichedMetadata?.thumbnail || null,
-        metadata: enrichedMetadata || null,
-        created_at: new Date().toISOString()
-      }
+      // UPDATE EXISTING ITEM
+      if (editingItem) {
+        const updates = {
+          type: itemType,
+          ...formData,
+          title: finalTitle,
+          // Keep existing image if not replaced
+          image_url: imageUrl || editingItem.image_url || enrichedMetadata?.thumbnail || null,
+          thumbnail_url: enrichedMetadata?.thumbnail || editingItem.thumbnail_url || null,
+          channel_name: formData.channelName || enrichedMetadata?.channelName || editingItem.channel_name || null,
+          creator_profile: enrichedMetadata?.creatorProfile || editingItem.creator_profile || null,
+          content_description: enrichedMetadata?.description || editingItem.content_description || null,
+          metadata: enrichedMetadata || editingItem.metadata || null
+        }
 
-      const { data, error } = await supabase
-        .from('items')
-        .insert([newItem])
-        .select()
+        const { error } = await supabase
+          .from('items')
+          .update(updates)
+          .eq('id', editingItem.id)
+          .eq('user_token', sessionToken)
 
-      if (error) throw error
+        if (error) throw error
 
-      setItems([data[0], ...items])
+        // Update local state
+        setItems(items.map(i => i.id === editingItem.id ? { ...i, ...updates } : i))
+
+        setToastEmoji('✏️')
+        setToastMessage('Item updated!')
+        setShowToast(true)
+
+      } else {
+        // CREATE NEW ITEM
+        const newItem = {
+          user_token: sessionToken,
+          type: itemType,
+          ...formData,
+          title: finalTitle,
+          image_url: imageUrl || enrichedMetadata?.thumbnail || null,
+          channel_name: formData.channelName || enrichedMetadata?.channelName || null,
+          creator_profile: enrichedMetadata?.creatorProfile || null,
+          content_description: enrichedMetadata?.description || null,
+          thumbnail_url: enrichedMetadata?.thumbnail || null,
+          metadata: enrichedMetadata || null,
+          created_at: new Date().toISOString()
+        }
+
+        const { data, error } = await supabase
+          .from('items')
+          .insert([newItem])
+          .select()
+
+        if (error) throw error
+
+        setItems([data[0], ...items])
+      } // End if/else for Create/Update
+
       // Force refresh from server to ensure strict order
       fetchItems()
-
-      setFormData({ url: '', title: '', category: '', notes: '' })
+      setFormData({ url: '', title: '', category: '', notes: '', channelName: '' })
       setSelectedFile(null)
       setUrlAnalysis(null) // Reset URL analysis
+      setEnrichedMetadata(null)
+      setEditingItem(null) // Clear editing state
       setIsModalOpen(false)
     } catch (error) {
       alert('Error saving item: ' + error.message)
@@ -438,7 +503,11 @@ function App() {
         >
           {autoSaveMode ? '⚡ Auto-Save' : '📝 Manual'}
         </button>
-        <button className="add-btn" onClick={() => setIsModalOpen(true)}>
+        <button className="add-btn" onClick={() => {
+          setEditingItem(null)
+          setFormData({ url: '', title: '', category: '', notes: '', channelName: '' })
+          setIsModalOpen(true)
+        }}>
           + Add Item
         </button>
         <button className="signout-btn" onClick={handleSignOut}>
@@ -529,8 +598,42 @@ function App() {
                   </div>
                 )}
 
-                <p className="video-notes">{item.notes}</p>
+                {item.notes ? (
+                  <p className="video-notes">{item.notes}</p>
+                ) : (
+                  <button
+                    onClick={() => handleEdit(item)}
+                    style={{
+                      background: 'none',
+                      border: '1px dashed var(--border-color)',
+                      color: 'var(--text-secondary)',
+                      padding: '0.5rem',
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      width: '100%',
+                      textAlign: 'left',
+                      marginBottom: '1rem',
+                      cursor: 'pointer',
+                      opacity: 0.7
+                    }}
+                    onMouseEnter={e => e.target.style.opacity = '1'}
+                    onMouseLeave={e => e.target.style.opacity = '0.7'}
+                  >
+                    + Add description / notes...
+                  </button>
+                )}
                 <div className="video-actions">
+                  <button
+                    className="icon-btn edit"
+                    onClick={() => handleEdit(item)}
+                    title="Edit"
+                    style={{ marginRight: '0.25rem' }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
                   <button
                     className="icon-btn delete"
                     onClick={() => deleteItem(item.id)}
@@ -577,7 +680,7 @@ function App() {
       {isModalOpen && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
           <div className="modal-content">
-            <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Add New Item</h2>
+            <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>{editingItem ? 'Edit Item' : 'Add New Item'}</h2>
 
             <div className="type-selector">
               <button
@@ -637,6 +740,11 @@ function App() {
                             if (!formData.title && metadata.title) {
                               setFormData(prev => ({ ...prev, title: metadata.title }))
                             }
+
+                            // Auto-fill channel name
+                            if (!formData.channelName && metadata.channelName) {
+                              setFormData(prev => ({ ...prev, channelName: metadata.channelName }))
+                            }
                           } catch (err) {
                             console.error('Metadata fetch error:', err)
                           } finally {
@@ -674,7 +782,8 @@ function App() {
                                 ...formData,
                                 url: text,
                                 category: contentAnalysis.fullCategory || analysis.suggestedCategory || '',
-                                title: metadata.title || ''
+                                title: metadata.title || '',
+                                channelName: metadata.channelName || ''
                               })
                             } catch (err) {
                               console.error('Paste metadata error:', err)
@@ -747,6 +856,20 @@ function App() {
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                 />
               </div>
+
+              {itemType === 'video' && (
+                <div className="form-group">
+                  <label className="form-label">Channel / Author (Optional)</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder="e.g. MKBHD or InstagramUser"
+                    value={formData.channelName}
+                    onChange={e => setFormData({ ...formData, channelName: e.target.value })}
+                  />
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label">Category</label>
 
@@ -944,7 +1067,7 @@ function App() {
                   Cancel
                 </button>
                 <button type="submit" className="add-btn" disabled={uploading}>
-                  {uploading ? 'Uploading...' : `Save ${itemType === 'video' ? 'Video' : 'Note'}`}
+                  {uploading ? 'Toploading...' : (editingItem ? 'Update Item' : `Save ${itemType === 'video' ? 'Video' : 'Note'}`)}
                 </button>
               </div>
             </form>
