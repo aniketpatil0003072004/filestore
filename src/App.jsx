@@ -352,7 +352,9 @@ function App() {
       if (editingItem) {
         const updates = {
           type: itemType,
-          ...formData,
+          url: formData.url,
+          category: formData.category,
+          notes: formData.notes,
           title: finalTitle,
           // Keep existing image if not replaced
           image_url: imageUrl || editingItem.image_url || enrichedMetadata?.thumbnail || null,
@@ -383,7 +385,9 @@ function App() {
         const newItem = {
           user_token: sessionToken,
           type: itemType,
-          ...formData,
+          url: formData.url,
+          category: formData.category,
+          notes: formData.notes,
           title: finalTitle,
           image_url: imageUrl || enrichedMetadata?.thumbnail || null,
           channel_name: formData.channelName || enrichedMetadata?.channelName || null,
