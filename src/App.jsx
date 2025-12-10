@@ -336,19 +336,34 @@ function App() {
     return null
   }
 
-  const handleEdit = (item) => {
-    if (item.type === 'secret' && !isSecretsUnlocked) {
-      setShowPasswordPrompt(true);
-      return;
-    }
-
+  // --- UPDATED HANDLE EDIT (Includes Decryption) ---
+  const handleEdit = async (item) => {
     setEditingItem(item)
     setItemType(item.type)
+
+    let descriptionText = item.notes || '';
+
+    // IF SECRET and UNLOCKED: Decrypt first so user can 'APPEND'
+    if (item.type === 'secret') {
+      if (!isSecretsUnlocked) {
+        setShowPasswordPrompt(true);
+        setEditingItem(null); // Abort edit
+        return;
+      }
+
+      try {
+        descriptionText = await decryptData(item.notes, masterPassword);
+      } catch (e) {
+        console.error("Decrypt edit failed", e);
+        descriptionText = "*** Error Decrypting ***";
+      }
+    }
+
     setFormData({
       url: item.url || '',
       title: item.title || '',
       category: item.category || '',
-      description: item.type === 'secret' ? '*** Encrypted ***' : (item.notes || ''),
+      description: descriptionText, // Now contains PLAINTEXT for easy appending
       userTag: item.metadata?.user_tag || '',
       channelName: item.channel_name || ''
     })
@@ -380,12 +395,11 @@ function App() {
           return;
         }
         try {
-          // Only encrypt if it's not the placeholder
-          if (formData.description !== '*** Encrypted ***') {
-            finalDescription = await encryptData(formData.description, masterPassword);
-          }
+          // Encrypt whatever is in the text box (Previous Data + New Appended Data)
+          finalDescription = await encryptData(formData.description, masterPassword);
+
           finalCategory = '🔒 Security';
-          finalTitle = '🔒 ' + (formData.title || 'Secret Note');
+          finalTitle = '🔒 ' + (formData.title || 'Secret Note').replace('🔒 ', '');
         } catch (err) {
           console.error(err);
           alert("Encryption Failed!");
@@ -401,9 +415,11 @@ function App() {
           metadata: finalMetadata
         }
 
-        if (itemType !== 'secret' || formData.description !== '*** Encrypted ***') {
-          updates.notes = finalDescription;
-        }
+        // Always update notes (it's either encrypted blob OR plain text)
+        updates.notes = finalDescription;
+
+        // Update Title too just in case
+        if (formData.title) updates.title = finalTitle;
 
         const { data, error } = await supabase.from('items').update(updates).eq('id', editingItem.id).select()
         if (error) throw error
@@ -697,7 +713,7 @@ function App() {
 
                 <div className="video-actions">
                   <button className="add-btn" onClick={() => handleEdit(item)} style={{ padding: '4px 12px', fontSize: '0.8rem', marginRight: 'auto', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-                    🏷️ Tag
+                    🏷️ Edit / Append
                   </button>
                   <button className="icon-btn delete" onClick={() => deleteItem(item.id)}>🗑️</button>
                 </div>
