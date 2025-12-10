@@ -37,7 +37,8 @@ function App() {
     url: '',
     title: '',
     category: '',
-    notes: '', // Used for "Tag" now
+    description: '', // Was 'notes', now properly 'description'
+    userTag: '',     // NEW: Specific Tag field
     channelName: ''
   })
   const [selectedFile, setSelectedFile] = useState(null)
@@ -91,7 +92,8 @@ function App() {
           url: sharedUrl,
           title: sharedTitle || '',
           category: analysis.suggestedCategory || '',
-          notes: ''
+          description: '',
+          userTag: ''
         })
         setItemType('video')
         setIsModalOpen(true)
@@ -186,13 +188,14 @@ function App() {
         url: url,
         title: finalTitle,
         category: contentAnalysis?.fullCategory || analysis.suggestedCategory || 'Videos',
-        notes: '',
+        notes: '', // Empty description initially
+
         image_url: metadata?.thumbnail || null,
         channel_name: metadata?.channelName || null,
         creator_profile: metadata?.creatorProfile || null,
         content_description: metadata?.description || null,
         thumbnail_url: metadata?.thumbnail || null,
-        metadata: metadata || null,
+        metadata: metadata || null, // No tag initially in auto-save
         created_at: new Date().toISOString()
       }
 
@@ -226,6 +229,7 @@ function App() {
     return null
   }
 
+  // Handle Edit: Populates Tag from Metadata and Description from Notes
   const handleEdit = (item) => {
     setEditingItem(item)
     setItemType(item.type)
@@ -233,7 +237,8 @@ function App() {
       url: item.url || '',
       title: item.title || '',
       category: item.category || '',
-      notes: item.notes || '',
+      description: item.notes || '', // Map 'items.notes' -> 'description'
+      userTag: item.metadata?.user_tag || '', // Map 'metadata.user_tag' -> 'userTag'
       channelName: item.channel_name || ''
     })
 
@@ -254,7 +259,7 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (itemType === 'video' && !formData.url) return
-    if (itemType === 'note' && !formData.notes) return
+    if (itemType === 'note' && !formData.description) return
 
     try {
       setUploading(true)
@@ -279,20 +284,30 @@ function App() {
         }
       }
 
+      // PREPARE METADATA WITH USER TAG
+      // We merge the existing enriched metadata with the new user_tag
+      const baseMetadata = enrichedMetadata || editingItem?.metadata || {};
+      const finalMetadata = {
+        ...baseMetadata,
+        user_tag: formData.userTag // Save tag inside JSON
+      };
+
       if (editingItem) {
         // UPDATE ITEM
         const updates = {
           type: itemType,
           url: formData.url,
           category: formData.category,
-          notes: formData.notes,
+
+          notes: formData.description, // Save 'description' to 'notes' column
+          metadata: finalMetadata, // Save 'tag' inside 'metadata' column
+
           title: finalTitle,
           channel_name: formData.channelName,
-          image_url: imageUrl || editingItem.image_url || enrichedMetadata?.thumbnail || null,
-          thumbnail_url: enrichedMetadata?.thumbnail || editingItem.thumbnail_url || null,
-          creator_profile: enrichedMetadata?.creatorProfile || editingItem.creator_profile || null,
-          content_description: enrichedMetadata?.description || editingItem.content_description || null,
-          metadata: enrichedMetadata || editingItem.metadata || null
+          image_url: imageUrl || editingItem.image_url || baseMetadata?.thumbnail || null,
+          thumbnail_url: baseMetadata?.thumbnail || editingItem.thumbnail_url || null,
+          creator_profile: baseMetadata?.creatorProfile || editingItem.creator_profile || null,
+          content_description: baseMetadata?.description || editingItem.content_description || null,
         }
 
         const { data, error } = await supabase.from('items').update(updates).eq('id', editingItem.id).select()
@@ -312,14 +327,16 @@ function App() {
           type: itemType,
           url: formData.url,
           category: formData.category,
-          notes: formData.notes,
+
+          notes: formData.description,
+          metadata: finalMetadata,
+
           title: finalTitle,
-          image_url: imageUrl || enrichedMetadata?.thumbnail || null,
-          channel_name: formData.channelName || enrichedMetadata?.channelName || null,
-          creator_profile: enrichedMetadata?.creatorProfile || null,
-          content_description: enrichedMetadata?.description || null,
-          thumbnail_url: enrichedMetadata?.thumbnail || null,
-          metadata: enrichedMetadata || null,
+          image_url: imageUrl || baseMetadata?.thumbnail || null,
+          channel_name: formData.channelName || baseMetadata?.channelName || null,
+          creator_profile: baseMetadata?.creatorProfile || null,
+          content_description: baseMetadata?.description || null,
+          thumbnail_url: baseMetadata?.thumbnail || null,
           created_at: new Date().toISOString()
         }
 
@@ -328,7 +345,7 @@ function App() {
         setItems([data[0], ...items])
       }
 
-      setFormData({ url: '', title: '', category: '', notes: '', channelName: '' })
+      setFormData({ url: '', title: '', category: '', description: '', userTag: '', channelName: '' })
       setSelectedFile(null)
       setUrlAnalysis(null)
       setEnrichedMetadata(null)
@@ -399,7 +416,7 @@ function App() {
         </button>
         <button className="add-btn" onClick={() => {
           setEditingItem(null)
-          setFormData({ url: '', title: '', category: '', notes: '', channelName: '' })
+          setFormData({ url: '', title: '', category: '', description: '', userTag: '', channelName: '' })
           setIsModalOpen(true)
         }}>
           + Add Item
@@ -483,30 +500,60 @@ function App() {
                   </div>
                 )}
 
-                {/* NEW TAG DISPLAY: REPLACED NOTES PARAGRAPH */}
-                {item.notes ? (
+                {/* 1. TAG DISPLAY */}
+                {/* Check metadata.user_tag first. If not, don't show anything here. */}
+                {item.metadata?.user_tag && (
                   <div className="video-tag" style={{
                     display: 'inline-block',
                     marginTop: '0.5rem',
+                    marginBottom: '0.25rem',
                     padding: '4px 10px',
                     borderRadius: '6px',
                     background: 'rgba(99, 102, 241, 0.1)',
                     border: '1px solid rgba(99, 102, 241, 0.3)',
                     color: 'var(--accent-primary)',
                     fontSize: '0.8rem',
-                    fontWeight: '600'
+                    fontWeight: '700',
+                    letterSpacing: '0.5px'
                   }}>
-                    📌 {item.notes}
+                    📌 {item.metadata.user_tag}
                   </div>
-                ) : (
-                  /* REMOVED THE 'ADD DESCRIPTION' BUTTON AS REQUESTED */
-                  <div style={{ marginBottom: '1rem' }}></div>
                 )}
 
+                {/* 2. DESCRIPTION DISPLAY */}
+                {item.notes && (
+                  <p className="video-notes" style={{
+                    fontSize: '0.9rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: '0.25rem',
+                    marginBottom: '1rem',
+                    lineHeight: '1.4'
+                  }}>
+                    {item.notes}
+                  </p>
+                )}
+
+                {/* If NO tag and NO description, add spacing */}
+                {(!item.metadata?.user_tag && !item.notes) && <div style={{ marginBottom: '1rem' }} />}
+
                 <div className="video-actions">
-                  <button className="icon-btn edit" onClick={() => handleEdit(item)} title="Edit" style={{ marginRight: '0.25rem' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                  {/* REPLACED PENCIL ICON WITH 'TAG' BUTTON */}
+                  <button
+                    className="add-btn"
+                    onClick={() => handleEdit(item)}
+                    title="Tag / Edit"
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: '0.8rem',
+                      marginRight: 'auto', // Pushes delete button to the right
+                      background: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)'
+                    }}
+                  >
+                    🏷️ Tag
                   </button>
+
                   <button className="icon-btn delete" onClick={() => deleteItem(item.id)} title="Delete">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                   </button>
@@ -611,15 +658,27 @@ function App() {
                 <datalist id="category-suggestions">{categories.filter(c => c !== 'All').map(cat => <option key={cat} value={cat} />)}</datalist>
               </div>
 
-              {/* UPDATED TAG INPUT - REPLACED NOTES TEXTAREA */}
+              {/* NEW TAG INPUT */}
               <div className="form-group">
-                <label className="form-label">Tag / Topic (What is this about?)</label>
+                <label className="form-label">Tag (Short Label, Optional)</label>
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="e.g. Trip to Goa, Funny Prank, React Tutorial"
-                  value={formData.notes} // We use the existing 'notes' field for Tags
-                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="e.g. Funny, Goa Trip, Must Watch"
+                  value={formData.userTag}
+                  onChange={e => setFormData({ ...formData, userTag: e.target.value })}
+                />
+              </div>
+
+              {/* NEW DESCRIPTION INPUT */}
+              <div className="form-group">
+                <label className="form-label">Description (What is this actually about?)</label>
+                <textarea
+                  className="form-input"
+                  rows="3"
+                  placeholder="Explain what the video says or why you saved it..."
+                  value={formData.description}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
                 />
               </div>
 
