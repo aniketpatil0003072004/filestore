@@ -27,6 +27,11 @@ function App() {
   const [tempPassword, setTempPassword] = useState('')
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
 
+  // CHANGE PASSWORD STATE
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false)
+  const [newPasswordInput, setNewPasswordInput] = useState('')
+  const [isReEncrypting, setIsReEncrypting] = useState(false)
+
   const [uploading, setUploading] = useState(false)
   const [fetchingMetadata, setFetchingMetadata] = useState(false)
 
@@ -186,6 +191,68 @@ function App() {
     setTempPassword('');
   }
 
+  // --- RE-ENCRYPTION LOGIC FOR PASSWORD CHANGE ---
+  const handlePasswordChange = async () => {
+    if (newPasswordInput.length < 4) {
+      alert("New password too short!");
+      return;
+    }
+
+    if (!confirm("⚠️ This will re-encrypt all your secret notes with the new password. Proceed?")) return;
+
+    setIsReEncrypting(true);
+
+    try {
+      // 1. Get all secret items
+      const secretItems = items.filter(i => i.type === 'secret');
+      const updatedItems = [];
+
+      // 2. Loop and Re-Encrypt
+      for (const item of secretItems) {
+        try {
+          // Decrypt with OLD password
+          const plainText = await decryptData(item.notes, masterPassword);
+          // Encrypt with NEW password
+          const newCipherText = await encryptData(plainText, newPasswordInput);
+
+          // Update in DB
+          const { error } = await supabase
+            .from('items')
+            .update({ notes: newCipherText })
+            .eq('id', item.id);
+
+          if (error) throw error;
+
+          updatedItems.push({ ...item, notes: newCipherText });
+
+        } catch (e) {
+          console.error("Failed to re-key item", item.id, e);
+          alert(`Error re-encrypting item: ${item.title}. It might be unrecoverable.`);
+        }
+      }
+
+      // 3. Update Local State
+      setItems(prev => prev.map(p => {
+        const updated = updatedItems.find(u => u.id === p.id);
+        return updated || p;
+      }));
+
+      // 4. Update Master Password
+      setMasterPassword(newPasswordInput);
+      setNewPasswordInput('');
+      setShowChangePasswordModal(false);
+      setToastMessage('Password Changed!');
+      setToastEmoji('🔑');
+      setShowToast(true);
+
+    } catch (err) {
+      console.error(err);
+      alert("Critical Error during re-encryption. Please check console.");
+    } finally {
+      setIsReEncrypting(false);
+    }
+  }
+
   const DecryptedNote = ({ item, password }) => {
     const [content, setContent] = useState('Decrypting...');
     const [error, setError] = useState(false);
@@ -316,10 +383,6 @@ function App() {
           // Only encrypt if it's not the placeholder
           if (formData.description !== '*** Encrypted ***') {
             finalDescription = await encryptData(formData.description, masterPassword);
-          } else {
-            // If user saved without changing placeholder, keep original (if editing)
-            // But here we are creating/updating.
-            // Usually editingItem handles this.
           }
           finalCategory = '🔒 Security';
           finalTitle = '🔒 ' + (formData.title || 'Secret Note');
@@ -351,7 +414,7 @@ function App() {
         setShowToast(true)
 
       } else {
-        // CREATE NEW ITEM - FULL RESTORED LOGIC
+        // CREATE NEW ITEM
         let imageUrl = null
         if (selectedFile) {
           const fileExt = selectedFile.name.split('.').pop()
@@ -375,7 +438,6 @@ function App() {
           created_at: new Date().toISOString()
         }
 
-        // Handle Video Specifics
         if (itemType === 'video') {
           let videoId = extractVideoId(formData.url)
           newItem.title = videoId ? `Video ${videoId}` : 'Untitled'
@@ -446,7 +508,6 @@ function App() {
     }
   }
 
-  // Filter Logic:
   const filteredItems = activeTag
     ? items.filter(i => i.metadata?.user_tag === activeTag && (i.type !== 'secret' || isSecretsUnlocked))
     : activeCategory === '🔒 Security'
@@ -470,6 +531,14 @@ function App() {
             📱 Install App
           </button>
         )}
+
+        {/* CHANGE PASSWORD BUTTON: Only visible when Security is unlocked */}
+        {isSecretsUnlocked && activeCategory === '🔒 Security' && (
+          <button className="add-btn" onClick={() => setShowChangePasswordModal(true)} style={{ background: '#ef4444', borderColor: '#dc2626' }}>
+            🔑 Change Pass
+          </button>
+        )}
+
         <button className="add-btn" onClick={toggleAutoSave} style={{ background: autoSaveMode ? '#f59e0b' : '#6366f1', minWidth: '140px' }}>
           {autoSaveMode ? '⚡ Auto-Save' : '📝 Manual'}
         </button>
@@ -538,6 +607,31 @@ function App() {
         </div>
       )}
 
+      {/* CHANGE PASSWORD MODAL */}
+      {showChangePasswordModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '350px', textAlign: 'center' }}>
+            <h3>🔑 Change Master Password</h3>
+            <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              This will <b>re-encrypt</b> all your secret notes with the new password. This process cannot be undone.
+            </p>
+            <input type="password"
+              className="form-input"
+              autoFocus
+              placeholder="New Strong Password"
+              value={newPasswordInput}
+              onChange={e => setNewPasswordInput(e.target.value)}
+            />
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+              <button className="cancel-btn" style={{ flex: 1 }} onClick={() => setShowChangePasswordModal(false)}>Cancel</button>
+              <button className="submit-btn" style={{ flex: 1, background: '#ef4444' }} onClick={handlePasswordChange} disabled={isReEncrypting}>
+                {isReEncrypting ? 'Encrypting...' : 'Change Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? <div style={{ textAlign: 'center' }}>Loading...</div> : (
         <div className="video-grid">
           {filteredItems.map(item => (
@@ -563,7 +657,6 @@ function App() {
                     <span style={{ fontSize: '1rem', fontWeight: '600', marginTop: '0.5rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>View Reel</span>
                   </div>
 
-                  {/* Default fallback */}
                   {(!item.image_url && !getThumbnail(item.url) && !item.url?.includes('instagram.com')) && <div style={{ width: '100%', height: '100%', minHeight: '180px', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📝</div>}
 
                   <a href={item.url} target="_blank" className="play-overlay">▶</a>
@@ -613,8 +706,6 @@ function App() {
           ))}
         </div>
       )}
-
-      {showStats && <StatsCalendar items={items} onClose={() => setShowStats(false)} />}
 
       {/* ADD/EDIT MODAL */}
       {isModalOpen && (
