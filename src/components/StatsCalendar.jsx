@@ -28,13 +28,16 @@ export default function StatsCalendar({ items, onClose }) {
             isSameDay(new Date(item.created_at), selectedDate)
         );
 
-        const youtubeCount = dayItems.filter(i => i.url.includes('youtube') || i.url.includes('youtu.be')).length;
-        const instaCount = dayItems.filter(i => i.url.includes('instagram')).length;
+        // SAFELY Check for URLs (Fix for crash)
+        const youtubeCount = dayItems.filter(i => i.url && (i.url.includes('youtube') || i.url.includes('youtu.be'))).length;
+        const instaCount = dayItems.filter(i => i.url && i.url.includes('instagram')).length;
+        const secretsCount = dayItems.filter(i => i.category === '🔒 Security').length;
 
         return {
             total: dayItems.length,
             youtube: youtubeCount,
             instagram: instaCount,
+            secrets: secretsCount,
             items: dayItems
         };
     }, [selectedDate, items]);
@@ -135,25 +138,35 @@ export default function StatsCalendar({ items, onClose }) {
                         <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{dailyStats.total} Total</span>
                     </h4>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
                         <div style={{
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
-                            padding: '1rem', background: '#FF000015', borderRadius: '10px',
+                            padding: '0.5rem', background: '#FF000015', borderRadius: '10px',
                             border: '1px solid #FF000030'
                         }}>
-                            <span style={{ fontSize: '1.5rem' }}>📺</span>
-                            <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '0.25rem' }}>{dailyStats.youtube}</span>
-                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>YouTube</span>
+                            <span style={{ fontSize: '1.2rem' }}>📺</span>
+                            <span style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '0.25rem' }}>{dailyStats.youtube}</span>
+                            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>YouTube</span>
                         </div>
 
                         <div style={{
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
-                            padding: '1rem', background: '#C1358415', borderRadius: '10px',
+                            padding: '0.5rem', background: '#C1358415', borderRadius: '10px',
                             border: '1px solid #C1358430'
                         }}>
-                            <span style={{ fontSize: '1.5rem' }}>📸</span>
-                            <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '0.25rem' }}>{dailyStats.instagram}</span>
-                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Instagram</span>
+                            <span style={{ fontSize: '1.2rem' }}>📸</span>
+                            <span style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '0.25rem' }}>{dailyStats.instagram}</span>
+                            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>Instagram</span>
+                        </div>
+
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            padding: '0.5rem', background: '#333', borderRadius: '10px',
+                            border: '1px solid #555'
+                        }}>
+                            <span style={{ fontSize: '1.2rem' }}>🔒</span>
+                            <span style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '0.25rem' }}>{dailyStats.secrets}</span>
+                            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>Secrets</span>
                         </div>
                     </div>
 
@@ -165,7 +178,8 @@ export default function StatsCalendar({ items, onClose }) {
                                     fontSize: '0.85rem', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
                                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                                 }}>
-                                    {item.category === 'Music' ? '🎵' : item.category === 'Movies' ? '🎬' : '📄'} {item.title || 'Untitled'}
+                                    {item.category === 'Music' ? '🎵' : item.category === 'Movies' ? '🎬' : item.category === '🔒 Security' ? '🔒' : '📄'}
+                                    {item.category === '🔒 Security' ? ' (Secret Item)' : (item.title || 'Untitled')}
                                 </div>
                             ))}
                         </div>
