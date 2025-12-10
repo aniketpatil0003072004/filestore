@@ -4,6 +4,7 @@ import Auth from './Auth'
 import { analyzeUrl, getPredefinedCategories, getCategoryEmoji } from './urlAnalyzer'
 import { storeToken, removeToken } from './indexedDBHelper'
 import SuccessToast from './components/SuccessToast'
+import StatsCalendar from './components/StatsCalendar' // New Import
 import { enrichMetadata } from './metadataFetcher'
 import { analyzeContentWithMetadata } from './categoryHelper'
 import './App.css'
@@ -13,6 +14,7 @@ function App() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [showStats, setShowStats] = useState(false) // New Stats Modal State
   const [editingItem, setEditingItem] = useState(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [uploading, setUploading] = useState(false)
@@ -163,7 +165,6 @@ function App() {
 
       try {
         metadata = await enrichMetadata(url)
-        // Standard Logic Analysis (No Gemini)
         contentAnalysis = analyzeContentWithMetadata(url, metadata, analysis)
       } catch (err) {
         console.error('Auto-save metadata fetch error:', err)
@@ -403,6 +404,12 @@ function App() {
         }}>
           + Add Item
         </button>
+
+        {/* STATS BUTTON */}
+        <button className="icon-btn" onClick={() => setShowStats(true)} title="Calendar Stats" style={{ marginLeft: '0.5rem' }}>
+          📅
+        </button>
+
         <button className="signout-btn" onClick={handleSignOut}>
           Sign Out
         </button>
@@ -501,6 +508,9 @@ function App() {
           ))}
         </div>
       )}
+
+      {/* STATS MODAL */}
+      {showStats && <StatsCalendar items={items} onClose={() => setShowStats(false)} />}
 
       {isModalOpen && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
