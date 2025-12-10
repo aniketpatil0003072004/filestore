@@ -26,25 +26,29 @@ export async function analyzeWithGemini(apiKey, metadata) {
       - Description Snippet: "${description?.substring(0, 300) || ''}"
 
       RULES FOR CATEGORIZATION:
-      1. LANGUAGE: Detect the primary language (Hindi, Kannada, English, Tamil, Telugu, Malayalam, etc.). Look for context clues (e.g., "Sandalwood" = Kannada, "Bollywood" = Hindi).
+      1. LANGUAGE: Detect the primary language (Hindi, Kannada, English, Tamil, Telugu, Malayalam, etc.). Use context clues (e.g., "Sandalwood" = Kannada, "Bollywood" = Hindi, "T-Series" = Hindi).
       2. TYPE: Identify if it is a "Movie", "Podcast", "Song", "Funny/Comedy", "Sports", "Tech", "News", or "Vlog".
          - "Movie": Must be a full movie (usually > 50 mins) or explicitly stated.
          - "Podcast": Interviews, talking heads, "Episode", "Show".
+         - "Song/Music": Music videos, lyrical videos, movie songs.
          - "Funny": Standup, pranks, memes, comedy skits.
-      3. OUTPUT CATEGORY: match one of these EXACT formats:
-         - "{Language} Movies" (e.g., "Hindi Movies", "Kannada Movies")
-         - "Podcasts" (All podcasts go here)
+      3. OUTPUT CATEGORY: YOU MUST CHOOSE ONE OF THESE EXACT CATEGORIES:
+         - "{Language} Movies" (e.g., "Hindi Movies", "Kannada Movies", "English Movies")
+         - "Podcasts" (All podcasts go here, regardless of language)
          - "Funny ({Language})" (e.g., "Funny (Hindi)", "Funny (English)")
          - "Sports"
-         - "Music"
+         - "Music" (For all songs)
          - "YouTube Shorts" (if it's a short/reel)
          - "Instagram Reels"
-         - "{Language} Content" (General fallback)
+         - "Tech"
+         - "Education"
+         - "News"
+         - "{Language} Content" (General fallback if it fits none of the above)
       
       Return ONLY a JSON object with this format (no markdown):
       {
-        "category": "The specific category name from above",
-        "emoji": "An emoji matching the category (e.g. 🎬, 🎙️, 😂)",
+        "category": "The exact category name from the list above",
+        "emoji": "An emoji matching the category (e.g. 🎬, 🎙️, 😂, 🎵)",
         "explanation": "Brief 5 word reason"
       }
     `;

@@ -95,6 +95,7 @@ function App() {
         const geminiResult = await analyzeWithGemini(geminiApiKey, metadata)
 
         if (geminiResult && geminiResult.category) {
+          console.log("Gemini Suggestion:", geminiResult);
           return {
             fullCategory: geminiResult.category,
             emoji: geminiResult.emoji,
@@ -407,6 +408,7 @@ function App() {
           metadata: enrichedMetadata || editingItem.metadata || null
         }
 
+        // Fix: Update based on ID only. The initial fetch already ensures we own this item.
         const { data, error } = await supabase
           .from('items')
           .update(updates)
