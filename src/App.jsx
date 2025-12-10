@@ -16,7 +16,10 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+
   const [activeCategory, setActiveCategory] = useState('All')
+  const [activeTag, setActiveTag] = useState(null)
+
   const [uploading, setUploading] = useState(false)
   const [fetchingMetadata, setFetchingMetadata] = useState(false)
 
@@ -139,7 +142,11 @@ function App() {
     }
   }
 
-  const categories = ['All', ...new Set(items.map(i => i.category).filter(Boolean))]
+  // extract all unique categories
+  const categories = ['All', 'YouTube Videos', 'YouTube Shorts', 'Instagram Reels', 'Movies', 'Instagram Posts', ...new Set(items.map(i => i.category).filter(Boolean))]
+
+  // NEW: Extract all unique USER TAGS from metadata for Autocomplete
+  const userTags = [...new Set(items.map(i => i.metadata?.user_tag).filter(Boolean))];
 
   const extractVideoId = (url) => {
     try {
@@ -177,12 +184,14 @@ function App() {
           finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Saved Link'
         }
       }
+
+      // AUTO SAVE DEFAULTS TO PLATFORM CATEGORY (NO AUTO-TAGGING)
       const newItem = {
         user_token: sessionToken,
         type: 'video',
         url: url,
         title: finalTitle,
-        category: contentAnalysis?.fullCategory || analysis.suggestedCategory || 'Videos',
+        category: contentAnalysis?.fullCategory || 'Other Links',
         notes: '',
         image_url: metadata?.thumbnail || null,
         channel_name: metadata?.channelName || null,
@@ -195,7 +204,7 @@ function App() {
       const { data, error } = await supabase.from('items').insert([newItem]).select()
       if (error) throw error
       setItems([data[0], ...items])
-      setToastEmoji(contentAnalysis?.emoji || analysis.emoji || '✅')
+      setToastEmoji(contentAnalysis?.emoji || '✅')
       setToastMessage(`Saved to ${newItem.category}!`)
       setShowToast(true)
       if (newItem.category) setActiveCategory(newItem.category)
@@ -236,7 +245,6 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // Validation ONLY for new items
     if (!editingItem) {
       if (itemType === 'video' && !formData.url) return
       if (itemType === 'note' && !formData.description) return
@@ -245,18 +253,16 @@ function App() {
     try {
       setUploading(true)
 
-      // UPDATE EXISTING ITEM
       if (editingItem) {
-        // Prepare Metadata
         const baseMetadata = editingItem.metadata || {};
         const finalMetadata = {
           ...baseMetadata,
-          user_tag: formData.userTag // We only update the tag
+          user_tag: formData.userTag
         };
 
         const updates = {
-          notes: formData.description, // User description
-          metadata: finalMetadata      // Tag is stored here
+          notes: formData.description,
+          metadata: finalMetadata
         }
 
         const { data, error } = await supabase
@@ -267,9 +273,7 @@ function App() {
 
         if (error) throw error
 
-        // If data is empty, it means RLS blocked it or ID not found
         if (!data || data.length === 0) {
-          // Force refetch to sync UI state, maybe it was deleted or permission changed
           await fetchItems();
           throw new Error("Update blocked! Please run the SQL fix provided.")
         }
@@ -283,7 +287,6 @@ function App() {
 
       } else {
         // CREATE NEW ITEM
-        // ... (Same creation logic, Simplified for readability here)
         let imageUrl = null
         if (selectedFile) {
           const fileExt = selectedFile.name.split('.').pop()
@@ -295,25 +298,26 @@ function App() {
           }
         }
 
-        // Logic to extract Title/Url etc for NEW items...
         let finalTitle = formData.title
         if (!finalTitle && itemType === 'video') {
           const videoId = extractVideoId(formData.url)
           finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Untitled'
         }
 
+        // Analyze for Categorization ONCE
+        let analysis = analyzeUrl(formData.url);
         let metadata = null
         try { if (itemType === 'video') metadata = await enrichMetadata(formData.url) } catch (e) { }
+
+        let contentAnalysis = analyzeContentWithMetadata(formData.url, metadata, analysis);
 
         const newItem = {
           user_token: sessionToken,
           type: itemType,
           url: formData.url,
-          category: formData.category,
-
+          category: contentAnalysis.fullCategory, // STRICT PLATFORM CATEGORY
           notes: formData.description,
-          metadata: { ...(metadata || {}), user_tag: formData.userTag },
-
+          metadata: { ...(metadata || {}), user_tag: formData.userTag }, // USER TAG STORED HERE
           title: finalTitle || (metadata?.title) || 'Untitled',
           image_url: imageUrl || metadata?.thumbnail || null,
           channel_name: formData.channelName || metadata?.channelName,
@@ -367,7 +371,9 @@ function App() {
     setShowToast(true)
   }
 
-  const filteredItems = activeCategory === 'All' ? items : items.filter(i => i.category === activeCategory)
+  const filteredItems = activeTag
+    ? items.filter(i => i.metadata?.user_tag === activeTag)
+    : (activeCategory === 'All' ? items : items.filter(i => i.category === activeCategory))
 
   if (!sessionToken) return <Auth onLogin={(token) => setSessionToken(token)} />
 
@@ -398,18 +404,41 @@ function App() {
       </div>
 
       <div className="categories">
-        {categories.map(cat => (
-          <button key={cat} className={`category-pill ${activeCategory === cat ? 'active' : ''}`} onClick={() => setActiveCategory(cat)}>
-            {cat !== 'All' && <span style={{ marginRight: '0.25rem' }}>{getCategoryEmoji(cat)}</span>} {cat}
+        {/* Force Unique Filter from Set */}
+        {[...new Set(categories)].map(cat => (
+          <button key={cat}
+            className={`category-pill ${activeCategory === cat && !activeTag ? 'active' : ''}`}
+            onClick={() => { setActiveCategory(cat); setActiveTag(null); }}
+          >
+            {getCategoryEmoji(cat)} {cat}
           </button>
         ))}
       </div>
+
+      {userTags.length > 0 && (
+        <div className="categories" style={{ marginTop: '0.5rem', paddingTop: '0' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginRight: '0.5rem', alignSelf: 'center' }}>
+            🏷️ My Tags:
+          </span>
+          {userTags.map(tag => (
+            <button key={tag}
+              className={`category-pill ${activeTag === tag ? 'active' : ''}`}
+              style={{
+                border: '1px dashed var(--accent-primary)',
+                background: activeTag === tag ? 'var(--accent-primary)' : 'transparent'
+              }}
+              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? <div style={{ textAlign: 'center' }}>Loading...</div> : (
         <div className="video-grid">
           {filteredItems.map(item => (
             <div key={item.id} className={`video-card ${item.type === 'note' ? 'note-card' : ''}`}>
-              {/* Thumbnail Display */}
               <div className="video-thumbnail">
                 {item.image_url ? <img src={item.image_url} alt="" style={{ objectFit: 'cover' }} /> :
                   (item.type === 'video' && getThumbnail(item.url)) ? <img src={getThumbnail(item.url)} alt="" /> :
@@ -449,7 +478,6 @@ function App() {
                   </p>
                 )}
 
-                {/* Spacer if empty */}
                 {(!item.metadata?.user_tag && !item.notes) && <div style={{ marginBottom: '1rem' }} />}
 
                 <div className="video-actions">
@@ -484,7 +512,6 @@ function App() {
 
             <form onSubmit={handleSubmit}>
 
-              {/* HIDE ALL THESE FIELDS WHEN EDITING! ONLY SHOW FOR NEW ITEMS */}
               {!editingItem && itemType === 'video' && (
                 <>
                   <div className="form-group">
@@ -503,17 +530,21 @@ function App() {
                 </>
               )}
 
-              {/* ALWAYS SHOW THESE FIELDS (EDIT OR ADD) */}
               <div className="form-group">
                 <label className="form-label">🏷️ Tag (Short Label)</label>
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="e.g. Goa Trip, Funny"
+                  placeholder="Type or Select Tag..."
+                  list="tag-suggestions" // LINKED TO DATALIST
                   value={formData.userTag}
                   onChange={e => setFormData({ ...formData, userTag: e.target.value })}
-                  autoFocus // Focus here when editing
+                  autoFocus
                 />
+                {/* NEW TAG SUGGESTIONS DROPDOWN */}
+                <datalist id="tag-suggestions">
+                  {userTags.map(tag => <option key={tag} value={tag} />)}
+                </datalist>
               </div>
 
               <div className="form-group">
