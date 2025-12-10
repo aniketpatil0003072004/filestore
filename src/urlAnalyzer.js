@@ -358,17 +358,46 @@ export function getPredefinedCategories() {
         { name: 'YouTube Videos', emoji: '🎥' },
         { name: 'YouTube Shorts', emoji: '⚡' },
         { name: 'Instagram Reels', emoji: '🎬' },
-        { name: 'Instagram Posts', emoji: '📸' }
+        { name: 'Instagram Posts', emoji: '📸' },
+        // Expanded Smart Categories
+        { name: 'Hindi Movies', emoji: '🎬' },
+        { name: 'English Movies', emoji: '🎬' },
+        { name: 'Podcasts', emoji: '🎙️' },
+        { name: 'Funny', emoji: '😂' },
+        { name: 'Sports', emoji: '🏆' },
+        { name: 'Music', emoji: '🎵' },
+        { name: 'Education', emoji: '📚' },
+        { name: 'Tech', emoji: '💻' }
     ]
 }
 
 /**
  * Get emoji for a category name
+ * Smart matching for dynamic categories
  * @param {string} categoryName - Category name
  * @returns {string} Emoji or default
  */
 export function getCategoryEmoji(categoryName) {
+    if (!categoryName) return '📁'
+
+    // 1. Exact Match
     const categories = getPredefinedCategories()
     const found = categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase())
-    return found ? found.emoji : '📁'
+    if (found) return found.emoji
+
+    // 2. Keyword Match (Smart Fallback)
+    const lowerName = categoryName.toLowerCase()
+
+    if (lowerName.includes('movie')) return '🎬'
+    if (lowerName.includes('podcast')) return '🎙️'
+    if (lowerName.includes('funny') || lowerName.includes('comedy')) return '😂'
+    if (lowerName.includes('sport') || lowerName.includes('cricket') || lowerName.includes('football')) return '🏆'
+    if (lowerName.includes('music') || lowerName.includes('song')) return '🎵'
+    if (lowerName.includes('tech') || lowerName.includes('code')) return '💻'
+    if (lowerName.includes('news')) return '📰'
+    if (lowerName.includes('short')) return '⚡'
+    if (lowerName.includes('reel')) return '🎬'
+    if (lowerName.includes('hindi')) return '🇮🇳' // Fallback for pure language categories
+
+    return '📁'
 }
