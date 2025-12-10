@@ -599,6 +599,8 @@ function App() {
         </div>
       )}
 
+      {showStats && <StatsCalendar items={items} onClose={() => setShowStats(false)} />}
+
       {/* PASSWORD PROMPT MODAL */}
       {showPasswordPrompt && (
         <div className="modal-overlay">
