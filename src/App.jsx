@@ -438,10 +438,45 @@ function App() {
         <div className="video-grid">
           {filteredItems.map(item => (
             <div key={item.id} className={`video-card ${item.type === 'note' ? 'note-card' : ''}`}>
-              <div className="video-thumbnail">
-                {item.image_url ? <img src={item.image_url} alt="" style={{ objectFit: 'cover' }} /> :
-                  (item.type === 'video' && getThumbnail(item.url)) ? <img src={getThumbnail(item.url)} alt="" /> :
-                    <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '3rem' }}>{item.type === 'video' ? '▶' : '📝'}</div>}
+              <div className="video-thumbnail" style={{ position: 'relative' }}>
+
+                {/* 1. Try Image URL first, with error handling */}
+                {item.image_url ? (
+                  <img
+                    src={item.image_url}
+                    alt=""
+                    style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      // If sibling exists (fallback), show it
+                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+
+                {/* 2. Standard YouTube Thumbnail Logic if no image_url */}
+                {(!item.image_url && item.type === 'video' && getThumbnail(item.url)) && (
+                  <img src={getThumbnail(item.url)} alt="" />
+                )}
+
+                {/* 3. Instagram Specific Fallback (Gradient Card) - Shows if image_url is missing OR errors out */}
+                <div className="insta-fallback" style={{
+                  display: (!item.image_url && item.url && item.url.includes('instagram.com')) ? 'flex' : 'none',
+                  width: '100%', height: '100%',
+                  position: item.image_url ? 'absolute' : 'relative', top: 0, left: 0,
+                  background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
+                  flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white'
+                }}>
+                  <span style={{ fontSize: '3rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}>📸</span>
+                  <span style={{ fontSize: '1rem', fontWeight: '600', marginTop: '0.5rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>View on Instagram</span>
+                </div>
+
+                {/* 4. Final Generic Fallback (Purple) */}
+                {(!item.image_url && !(item.type === 'video' && getThumbnail(item.url)) && !(item.url && item.url.includes('instagram.com'))) && (
+                  <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '3rem' }}>
+                    {item.type === 'video' ? '▶' : '📝'}
+                  </div>
+                )}
 
                 <div className="thumbnail-badges">
                   <span className="video-category-badge">{item.category || 'Uncategorized'}</span>
