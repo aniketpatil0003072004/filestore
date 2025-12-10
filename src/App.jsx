@@ -142,8 +142,8 @@ function App() {
     }
   }
 
-  // extract all unique categories
-  const categories = ['All', 'YouTube Videos', 'YouTube Shorts', 'Instagram Reels', 'Movies', 'Instagram Posts', ...new Set(items.map(i => i.category).filter(Boolean))]
+  // FIXED CATEGORIES (Strict List)
+  const categories = ['All', 'YouTube Videos', 'YouTube Shorts', 'Instagram Reels', 'Instagram Posts'];
 
   // NEW: Extract all unique USER TAGS from metadata for Autocomplete
   const userTags = [...new Set(items.map(i => i.metadata?.user_tag).filter(Boolean))];
@@ -185,7 +185,6 @@ function App() {
         }
       }
 
-      // AUTO SAVE DEFAULTS TO PLATFORM CATEGORY (NO AUTO-TAGGING)
       const newItem = {
         user_token: sessionToken,
         type: 'video',
@@ -304,20 +303,21 @@ function App() {
           finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Untitled'
         }
 
-        // Analyze for Categorization ONCE
+        // Analyze URL
         let analysis = analyzeUrl(formData.url);
         let metadata = null
         try { if (itemType === 'video') metadata = await enrichMetadata(formData.url) } catch (e) { }
 
+        // Use Strict Categorization
         let contentAnalysis = analyzeContentWithMetadata(formData.url, metadata, analysis);
 
         const newItem = {
           user_token: sessionToken,
           type: itemType,
           url: formData.url,
-          category: contentAnalysis.fullCategory, // STRICT PLATFORM CATEGORY
+          category: contentAnalysis.fullCategory,
           notes: formData.description,
-          metadata: { ...(metadata || {}), user_tag: formData.userTag }, // USER TAG STORED HERE
+          metadata: { ...(metadata || {}), user_tag: formData.userTag },
           title: finalTitle || (metadata?.title) || 'Untitled',
           image_url: imageUrl || metadata?.thumbnail || null,
           channel_name: formData.channelName || metadata?.channelName,
@@ -404,8 +404,7 @@ function App() {
       </div>
 
       <div className="categories">
-        {/* Force Unique Filter from Set */}
-        {[...new Set(categories)].map(cat => (
+        {categories.map(cat => (
           <button key={cat}
             className={`category-pill ${activeCategory === cat && !activeTag ? 'active' : ''}`}
             onClick={() => { setActiveCategory(cat); setActiveTag(null); }}
@@ -535,16 +534,36 @@ function App() {
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="Type or Select Tag..."
-                  list="tag-suggestions" // LINKED TO DATALIST
+                  placeholder="Type a new tag or select below..."
                   value={formData.userTag}
                   onChange={e => setFormData({ ...formData, userTag: e.target.value })}
                   autoFocus
                 />
-                {/* NEW TAG SUGGESTIONS DROPDOWN */}
-                <datalist id="tag-suggestions">
-                  {userTags.map(tag => <option key={tag} value={tag} />)}
-                </datalist>
+
+                {/* EXPLICT TAG CHIPS */}
+                {userTags.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    {userTags.map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, userTag: tag })}
+                        style={{
+                          background: formData.userTag === tag ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
+                          color: formData.userTag === tag ? '#fff' : 'var(--text-secondary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '12px',
+                          padding: '4px 10px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
