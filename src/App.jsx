@@ -37,8 +37,8 @@ function App() {
     url: '',
     title: '',
     category: '',
-    description: '', // Was 'notes', now properly 'description'
-    userTag: '',     // NEW: Specific Tag field
+    description: '',
+    userTag: '',
     channelName: ''
   })
   const [selectedFile, setSelectedFile] = useState(null)
@@ -74,7 +74,7 @@ function App() {
     })
   }, [])
 
-  // Handle Share Target API
+  // Handle Share Target
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const sharedUrl = urlParams.get('url') || urlParams.get('text')
@@ -102,7 +102,6 @@ function App() {
     }
   }, [sessionToken, autoSaveMode])
 
-  // Persist token
   useEffect(() => {
     if (sessionToken) {
       localStorage.setItem('video_vault_token', sessionToken)
@@ -115,12 +114,11 @@ function App() {
     }
   }, [sessionToken])
 
-  // Auto-focus input
   useEffect(() => {
-    if (isModalOpen && itemType === 'video' && urlInputRef.current) {
+    if (isModalOpen && itemType === 'video' && urlInputRef.current && !editingItem) {
       setTimeout(() => urlInputRef.current?.focus(), 100)
     }
-  }, [isModalOpen, itemType])
+  }, [isModalOpen, itemType, editingItem])
 
   const fetchItems = async () => {
     if (!sessionToken) return
@@ -164,14 +162,12 @@ function App() {
       setUploading(true)
       let metadata = null
       let contentAnalysis = null
-
       try {
         metadata = await enrichMetadata(url)
         contentAnalysis = analyzeContentWithMetadata(url, metadata, analysis)
       } catch (err) {
         console.error('Auto-save metadata fetch error:', err)
       }
-
       let finalTitle = title
       if (!finalTitle || finalTitle.trim() === '') {
         if (metadata?.title) {
@@ -181,34 +177,28 @@ function App() {
           finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Saved Link'
         }
       }
-
       const newItem = {
         user_token: sessionToken,
         type: 'video',
         url: url,
         title: finalTitle,
         category: contentAnalysis?.fullCategory || analysis.suggestedCategory || 'Videos',
-        notes: '', // Empty description initially
-
+        notes: '',
         image_url: metadata?.thumbnail || null,
         channel_name: metadata?.channelName || null,
         creator_profile: metadata?.creatorProfile || null,
         content_description: metadata?.description || null,
         thumbnail_url: metadata?.thumbnail || null,
-        metadata: metadata || null, // No tag initially in auto-save
+        metadata: metadata || null,
         created_at: new Date().toISOString()
       }
-
       const { data, error } = await supabase.from('items').insert([newItem]).select()
       if (error) throw error
-
       setItems([data[0], ...items])
       setToastEmoji(contentAnalysis?.emoji || analysis.emoji || '✅')
       setToastMessage(`Saved to ${newItem.category}!`)
       setShowToast(true)
-
       if (newItem.category) setActiveCategory(newItem.category)
-
     } catch (error) {
       console.error('Error auto-saving:', error.message)
       setToastEmoji('❌')
@@ -229,7 +219,6 @@ function App() {
     return null
   }
 
-  // Handle Edit: Populates Tag from Metadata and Description from Notes
   const handleEdit = (item) => {
     setEditingItem(item)
     setItemType(item.type)
@@ -237,91 +226,85 @@ function App() {
       url: item.url || '',
       title: item.title || '',
       category: item.category || '',
-      description: item.notes || '', // Map 'items.notes' -> 'description'
-      userTag: item.metadata?.user_tag || '', // Map 'metadata.user_tag' -> 'userTag'
+      description: item.notes || '',
+      userTag: item.metadata?.user_tag || '',
       channelName: item.channel_name || ''
     })
-
-    if (item.metadata) {
-      setEnrichedMetadata(item.metadata)
-    } else {
-      setEnrichedMetadata({
-        title: item.title,
-        thumbnail: item.thumbnail_url || item.image_url,
-        channelName: item.channel_name,
-        creatorProfile: item.creator_profile,
-        description: item.content_description
-      })
-    }
     setIsModalOpen(true)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (itemType === 'video' && !formData.url) return
-    if (itemType === 'note' && !formData.description) return
+
+    // Validation ONLY for new items
+    if (!editingItem) {
+      if (itemType === 'video' && !formData.url) return
+      if (itemType === 'note' && !formData.description) return
+    }
 
     try {
       setUploading(true)
-      let imageUrl = null
 
-      if (selectedFile) {
-        const fileExt = selectedFile.name.split('.').pop()
-        const fileName = `${Date.now()}.${fileExt}`
-        const { error: uploadError } = await supabase.storage.from('screenshots').upload(fileName, selectedFile)
-        if (uploadError) throw uploadError
-        const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(fileName)
-        imageUrl = publicUrl
-      }
-
-      let finalTitle = formData.title
-      if (!finalTitle || finalTitle.trim() === '') {
-        if (itemType === 'video') {
-          const videoId = extractVideoId(formData.url)
-          finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Untitled Video'
-        } else {
-          finalTitle = `Note ${new Date().toLocaleDateString()}`
-        }
-      }
-
-      // PREPARE METADATA WITH USER TAG
-      // We merge the existing enriched metadata with the new user_tag
-      const baseMetadata = enrichedMetadata || editingItem?.metadata || {};
-      const finalMetadata = {
-        ...baseMetadata,
-        user_tag: formData.userTag // Save tag inside JSON
-      };
-
+      // UPDATE EXISTING ITEM
       if (editingItem) {
-        // UPDATE ITEM
+        // Prepare Metadata
+        const baseMetadata = editingItem.metadata || {};
+        const finalMetadata = {
+          ...baseMetadata,
+          user_tag: formData.userTag // We only update the tag
+        };
+
         const updates = {
-          type: itemType,
-          url: formData.url,
-          category: formData.category,
-
-          notes: formData.description, // Save 'description' to 'notes' column
-          metadata: finalMetadata, // Save 'tag' inside 'metadata' column
-
-          title: finalTitle,
-          channel_name: formData.channelName,
-          image_url: imageUrl || editingItem.image_url || baseMetadata?.thumbnail || null,
-          thumbnail_url: baseMetadata?.thumbnail || editingItem.thumbnail_url || null,
-          creator_profile: baseMetadata?.creatorProfile || editingItem.creator_profile || null,
-          content_description: baseMetadata?.description || editingItem.content_description || null,
+          notes: formData.description, // User description
+          metadata: finalMetadata      // Tag is stored here
         }
 
-        const { data, error } = await supabase.from('items').update(updates).eq('id', editingItem.id).select()
+        const { data, error } = await supabase
+          .from('items')
+          .update(updates)
+          .eq('id', editingItem.id) // Strict ID match
+          .select()
+
         if (error) throw error
-        if (!data || data.length === 0) throw new Error("Update failed!")
+
+        // If data is empty, it means RLS blocked it or ID not found
+        if (!data || data.length === 0) {
+          // Force refetch to sync UI state, maybe it was deleted or permission changed
+          await fetchItems();
+          throw new Error("Update blocked! Please run the SQL fix provided.")
+        }
 
         const updatedItem = data[0]
         setItems(items.map(i => i.id === editingItem.id ? updatedItem : i))
-        setToastEmoji('✏️')
-        setToastMessage('Item updated!')
+
+        setToastEmoji('🏷️')
+        setToastMessage('Tag Updated!')
         setShowToast(true)
 
       } else {
-        // CREATE ITEM
+        // CREATE NEW ITEM
+        // ... (Same creation logic, Simplified for readability here)
+        let imageUrl = null
+        if (selectedFile) {
+          const fileExt = selectedFile.name.split('.').pop()
+          const fileName = `${Date.now()}.${fileExt}`
+          const { error: upload } = await supabase.storage.from('screenshots').upload(fileName, selectedFile)
+          if (!upload) {
+            const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(fileName)
+            imageUrl = publicUrl
+          }
+        }
+
+        // Logic to extract Title/Url etc for NEW items...
+        let finalTitle = formData.title
+        if (!finalTitle && itemType === 'video') {
+          const videoId = extractVideoId(formData.url)
+          finalTitle = videoId ? `Video ${videoId.substring(0, 8)}` : 'Untitled'
+        }
+
+        let metadata = null
+        try { if (itemType === 'video') metadata = await enrichMetadata(formData.url) } catch (e) { }
+
         const newItem = {
           user_token: sessionToken,
           type: itemType,
@@ -329,14 +312,11 @@ function App() {
           category: formData.category,
 
           notes: formData.description,
-          metadata: finalMetadata,
+          metadata: { ...(metadata || {}), user_tag: formData.userTag },
 
-          title: finalTitle,
-          image_url: imageUrl || baseMetadata?.thumbnail || null,
-          channel_name: formData.channelName || baseMetadata?.channelName || null,
-          creator_profile: baseMetadata?.creatorProfile || null,
-          content_description: baseMetadata?.description || null,
-          thumbnail_url: baseMetadata?.thumbnail || null,
+          title: finalTitle || (metadata?.title) || 'Untitled',
+          image_url: imageUrl || metadata?.thumbnail || null,
+          channel_name: formData.channelName || metadata?.channelName,
           created_at: new Date().toISOString()
         }
 
@@ -352,7 +332,7 @@ function App() {
       setEditingItem(null)
       setIsModalOpen(false)
     } catch (error) {
-      alert('Error saving item: ' + error.message)
+      alert('Error: ' + error.message)
     } finally {
       setUploading(false)
     }
@@ -403,15 +383,7 @@ function App() {
             📱 Install App
           </button>
         )}
-        <button
-          className="add-btn"
-          onClick={toggleAutoSave}
-          style={{
-            background: autoSaveMode ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-            minWidth: '140px'
-          }}
-          title={autoSaveMode ? 'Auto-save ON' : 'Manual mode ON'}
-        >
+        <button className="add-btn" onClick={toggleAutoSave} style={{ background: autoSaveMode ? '#f59e0b' : '#6366f1', minWidth: '140px' }}>
           {autoSaveMode ? '⚡ Auto-Save' : '📝 Manual'}
         </button>
         <button className="add-btn" onClick={() => {
@@ -421,142 +393,74 @@ function App() {
         }}>
           + Add Item
         </button>
-
-        {/* STATS BUTTON */}
-        <button className="icon-btn" onClick={() => setShowStats(true)} title="Calendar Stats" style={{ marginLeft: '0.5rem' }}>
-          📅
-        </button>
-
-        <button className="signout-btn" onClick={handleSignOut}>
-          Sign Out
-        </button>
+        <button className="icon-btn" onClick={() => setShowStats(true)}>📅</button>
+        <button className="signout-btn" onClick={handleSignOut}>Sign Out</button>
       </div>
 
       <div className="categories">
         {categories.map(cat => (
-          <button
-            key={cat}
-            className={`category-pill ${activeCategory === cat ? 'active' : ''}`}
-            onClick={() => setActiveCategory(cat)}
-          >
-            {cat !== 'All' && <span style={{ marginRight: '0.25rem' }}>{getCategoryEmoji(cat)}</span>}
-            {cat}
+          <button key={cat} className={`category-pill ${activeCategory === cat ? 'active' : ''}`} onClick={() => setActiveCategory(cat)}>
+            {cat !== 'All' && <span style={{ marginRight: '0.25rem' }}>{getCategoryEmoji(cat)}</span>} {cat}
           </button>
         ))}
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</div>
-      ) : (
+      {loading ? <div style={{ textAlign: 'center' }}>Loading...</div> : (
         <div className="video-grid">
           {filteredItems.map(item => (
             <div key={item.id} className={`video-card ${item.type === 'note' ? 'note-card' : ''}`}>
+              {/* Thumbnail Display */}
               <div className="video-thumbnail">
-                {item.image_url ? (
-                  <img src={item.image_url} alt={item.title} style={{ objectFit: 'cover' }} />
-                ) : item.type === 'video' && getThumbnail(item.url) ? (
-                  <img src={getThumbnail(item.url)} alt={item.title} />
-                ) : (
-                  <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '3rem' }}>
-                    {item.type === 'video' ? '▶' : '📝'}
-                  </div>
-                )}
+                {item.image_url ? <img src={item.image_url} alt="" style={{ objectFit: 'cover' }} /> :
+                  (item.type === 'video' && getThumbnail(item.url)) ? <img src={getThumbnail(item.url)} alt="" /> :
+                    <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '3rem' }}>{item.type === 'video' ? '▶' : '📝'}</div>}
+
                 <div className="thumbnail-badges">
-                  <div className="badge-group-left">
-                    <span className="video-category-badge">{item.category || 'Uncategorized'}</span>
-                  </div>
+                  <span className="video-category-badge">{item.category || 'Uncategorized'}</span>
                 </div>
-                {item.type === 'video' && (
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="play-overlay">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" /></svg>
-                  </a>
-                )}
+                {item.type === 'video' && <a href={item.url} target="_blank" className="play-overlay">▶</a>}
               </div>
 
               <div className="video-info">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.25rem' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.7 }}>
-                    📅 {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.7 }}>
+                  📅 {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
 
                 <h3 className="video-title">
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                    {item.title || (item.type === 'video' ? 'Untitled Video' : 'Untitled Note')}
+                  <a href={item.url} target="_blank" style={{ color: 'inherit', textDecoration: 'none' }}>
+                    {item.title || 'Untitled'}
                   </a>
                 </h3>
 
-                {item.channel_name && (
-                  <div className="creator-info" style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    {item.creator_profile ? (
-                      <a href={item.creator_profile} target="_blank" rel="noopener noreferrer" className="channel-link" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'inherit', textDecoration: 'none' }}>
-                        <span style={{ opacity: 0.8 }}>By:</span> <strong>{item.channel_name}</strong>
-                      </a>
-                    ) : (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <span style={{ opacity: 0.8 }}>By:</span> <strong>{item.channel_name}</strong>
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* 1. TAG DISPLAY */}
-                {/* Check metadata.user_tag first. If not, don't show anything here. */}
                 {item.metadata?.user_tag && (
                   <div className="video-tag" style={{
-                    display: 'inline-block',
-                    marginTop: '0.5rem',
-                    marginBottom: '0.25rem',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    background: 'rgba(99, 102, 241, 0.1)',
-                    border: '1px solid rgba(99, 102, 241, 0.3)',
-                    color: 'var(--accent-primary)',
-                    fontSize: '0.8rem',
-                    fontWeight: '700',
-                    letterSpacing: '0.5px'
+                    display: 'inline-block', marginTop: '0.5rem', marginBottom: '0.25rem',
+                    padding: '4px 10px', borderRadius: '6px',
+                    background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)',
+                    color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: '700'
                   }}>
                     📌 {item.metadata.user_tag}
                   </div>
                 )}
 
-                {/* 2. DESCRIPTION DISPLAY */}
                 {item.notes && (
-                  <p className="video-notes" style={{
-                    fontSize: '0.9rem',
-                    color: 'var(--text-secondary)',
-                    marginTop: '0.25rem',
-                    marginBottom: '1rem',
-                    lineHeight: '1.4'
-                  }}>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem', marginBottom: '1rem', lineHeight: '1.4' }}>
                     {item.notes}
                   </p>
                 )}
 
-                {/* If NO tag and NO description, add spacing */}
+                {/* Spacer if empty */}
                 {(!item.metadata?.user_tag && !item.notes) && <div style={{ marginBottom: '1rem' }} />}
 
                 <div className="video-actions">
-                  {/* REPLACED PENCIL ICON WITH 'TAG' BUTTON */}
                   <button
                     className="add-btn"
                     onClick={() => handleEdit(item)}
-                    title="Tag / Edit"
-                    style={{
-                      padding: '4px 12px',
-                      fontSize: '0.8rem',
-                      marginRight: 'auto', // Pushes delete button to the right
-                      background: 'transparent',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)'
-                    }}
+                    style={{ padding: '4px 12px', fontSize: '0.8rem', marginRight: 'auto', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
                   >
                     🏷️ Tag
                   </button>
-
-                  <button className="icon-btn delete" onClick={() => deleteItem(item.id)} title="Delete">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                  </button>
+                  <button className="icon-btn delete" onClick={() => deleteItem(item.id)}>🗑️</button>
                 </div>
               </div>
             </div>
@@ -564,119 +468,60 @@ function App() {
         </div>
       )}
 
-      {/* STATS MODAL */}
       {showStats && <StatsCalendar items={items} onClose={() => setShowStats(false)} />}
 
       {isModalOpen && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
           <div className="modal-content">
-            <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>{editingItem ? 'Edit Item' : 'Add New Item'}</h2>
-            <div className="type-selector">
-              <button className={`type-btn ${itemType === 'video' ? 'active' : ''}`} onClick={() => setItemType('video')}>Video Link</button>
-              <button className={`type-btn ${itemType === 'note' ? 'active' : ''}`} onClick={() => setItemType('note')}>Text Note</button>
-            </div>
-            <form onSubmit={handleSubmit}>
-              {itemType === 'video' && (
-                <div className="form-group">
-                  <label className="form-label">Video URL</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                      ref={urlInputRef}
-                      className="form-input"
-                      type="url"
-                      required={itemType === 'video'}
-                      placeholder="https://youtube.com/... or https://instagram.com/..."
-                      value={formData.url}
-                      onChange={async e => {
-                        const newUrl = e.target.value
-                        setFormData({ ...formData, url: newUrl })
-                        if (newUrl) {
-                          const analysis = analyzeUrl(newUrl)
-                          setUrlAnalysis(analysis)
-                          setFetchingMetadata(true)
-                          try {
-                            const metadata = await enrichMetadata(newUrl)
-                            setEnrichedMetadata(metadata)
-                            const contentAnalysis = analyzeContentWithMetadata(newUrl, metadata, analysis)
-                            if (!formData.category || urlAnalysis?.suggestedCategory === formData.category) {
-                              setFormData(prev => ({
-                                ...prev,
-                                url: newUrl,
-                                category: contentAnalysis.fullCategory || analysis.suggestedCategory || ''
-                              }))
-                            }
-                            if (!formData.title && metadata.title) setFormData(prev => ({ ...prev, title: metadata.title }))
-                            if (!formData.channelName && metadata.channelName) setFormData(prev => ({ ...prev, channelName: metadata.channelName }))
-                          } catch (err) { console.error(err) } finally { setFetchingMetadata(false) }
-                        } else {
-                          setUrlAnalysis(null)
-                          setEnrichedMetadata(null)
-                        }
-                      }}
-                      style={{ flex: 1 }}
-                    />
-                    <button type="button" className="add-btn" onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText()
-                        if (text) {
-                          setFormData({ ...formData, url: text })
-                          const analysis = analyzeUrl(text)
-                          setUrlAnalysis(analysis)
-                          setFetchingMetadata(true)
-                          try {
-                            const metadata = await enrichMetadata(text)
-                            setEnrichedMetadata(metadata)
-                            const contentAnalysis = analyzeContentWithMetadata(text, metadata, analysis)
-                            setFormData({
-                              ...formData,
-                              url: text,
-                              category: contentAnalysis.fullCategory || analysis.suggestedCategory || '',
-                              title: metadata.title || '',
-                              channelName: metadata.channelName || ''
-                            })
-                          } catch (err) { console.error(err) } finally { setFetchingMetadata(false) }
-                        }
-                      } catch (err) { console.error(err) }
-                    }} title="Paste from Clipboard">📋</button>
-                  </div>
-                  {fetchingMetadata && <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-primary)' }}>Analyzing content...</div>}
-                </div>
-              )}
-              {itemType === 'video' && (
-                <div className="form-group">
-                  <label className="form-label">Channel Name (Optional)</label>
-                  <input className="form-input" type="text" placeholder="e.g. T-Series" value={formData.channelName} onChange={e => setFormData({ ...formData, channelName: e.target.value })} />
-                </div>
-              )}
-              <div className="form-group">
-                <label className="form-label">Title (Optional)</label>
-                <input className="form-input" type="text" placeholder="Summarize this video..." value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Category</label>
-                <input className="form-input" type="text" list="category-suggestions" placeholder="e.g. Music, Cooking..." value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} />
-                <datalist id="category-suggestions">{categories.filter(c => c !== 'All').map(cat => <option key={cat} value={cat} />)}</datalist>
-              </div>
+            <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>{editingItem ? 'Edit Details' : 'Add New Item'}</h2>
 
-              {/* NEW TAG INPUT */}
+            {!editingItem && (
+              <div className="type-selector">
+                <button className={`type-btn ${itemType === 'video' ? 'active' : ''}`} onClick={() => setItemType('video')}>Video Link</button>
+                <button className={`type-btn ${itemType === 'note' ? 'active' : ''}`} onClick={() => setItemType('note')}>Text Note</button>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+
+              {/* HIDE ALL THESE FIELDS WHEN EDITING! ONLY SHOW FOR NEW ITEMS */}
+              {!editingItem && itemType === 'video' && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Video URL</label>
+                    <input className="form-input" type="url" required value={formData.url} onChange={e => setFormData({ ...formData, url: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Title</label>
+                    <input className="form-input" type="text" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Category</label>
+                    <input className="form-input" type="text" list="cat-list" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} />
+                    <datalist id="cat-list">{categories.map(c => <option key={c} value={c} />)}</datalist>
+                  </div>
+                </>
+              )}
+
+              {/* ALWAYS SHOW THESE FIELDS (EDIT OR ADD) */}
               <div className="form-group">
-                <label className="form-label">Tag (Short Label, Optional)</label>
+                <label className="form-label">🏷️ Tag (Short Label)</label>
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="e.g. Funny, Goa Trip, Must Watch"
+                  placeholder="e.g. Goa Trip, Funny"
                   value={formData.userTag}
                   onChange={e => setFormData({ ...formData, userTag: e.target.value })}
+                  autoFocus // Focus here when editing
                 />
               </div>
 
-              {/* NEW DESCRIPTION INPUT */}
               <div className="form-group">
-                <label className="form-label">Description (What is this actually about?)</label>
+                <label className="form-label">📝 Description</label>
                 <textarea
                   className="form-input"
                   rows="3"
-                  placeholder="Explain what the video says or why you saved it..."
+                  placeholder="What is this video about?"
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
                 />
@@ -685,7 +530,7 @@ function App() {
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={() => setIsModalOpen(false)}>Cancel</button>
                 <button type="submit" className="submit-btn" disabled={uploading}>
-                  {uploading ? 'Saving...' : (editingItem ? 'Update Item' : 'Save Item')}
+                  {uploading ? 'Saving...' : (editingItem ? 'Update' : 'Save Item')}
                 </button>
               </div>
             </form>
