@@ -9,12 +9,11 @@ import { analyzeContentWithMetadata } from './categoryHelper'
 import './App.css'
 
 function App() {
-  // We use a simple token string for the session now
   const [sessionToken, setSessionToken] = useState(() => localStorage.getItem('video_vault_token'))
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState(null) // Track item being edited
+  const [editingItem, setEditingItem] = useState(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [uploading, setUploading] = useState(false)
   const [fetchingMetadata, setFetchingMetadata] = useState(false)
@@ -22,14 +21,8 @@ function App() {
   // Auto-save mode (default: ON)
   const [autoSaveMode, setAutoSaveMode] = useState(() => {
     const saved = localStorage.getItem('auto_save_mode')
-    return saved !== null ? saved === 'true' : true // Default to true
+    return saved !== null ? saved === 'true' : true
   })
-
-  // Gemini State - Defaulting to User Provided Key
-  const [geminiApiKey, setGeminiApiKey] = useState(() => {
-    return localStorage.getItem('gemini_api_key') || 'AIzaSyCpYQNUa-r7G_PDDPWpCifR6AIrBdp29lY'
-  })
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   // Success toast state
   const [showToast, setShowToast] = useState(false)
@@ -43,27 +36,23 @@ function App() {
     title: '',
     category: '',
     notes: '',
-    channelName: '' // Added editable channel name
+    channelName: ''
   })
   const [selectedFile, setSelectedFile] = useState(null)
-  const [urlAnalysis, setUrlAnalysis] = useState(null) // Smart URL detection result
-  const [enrichedMetadata, setEnrichedMetadata] = useState(null) // Fetched metadata
+  const [urlAnalysis, setUrlAnalysis] = useState(null)
+  const [enrichedMetadata, setEnrichedMetadata] = useState(null)
 
-  // Ref for auto-focus
   const urlInputRef = useRef(null)
 
   // PWA Install Prompt
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [showInstallButton, setShowInstallButton] = useState(false)
 
-  // Register Service Worker for PWA
+  // Register Service Worker
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
-          console.log('Service Worker registered:', registration)
-
-          // Send Supabase config to Service Worker for background saves
           if (registration.active) {
             registration.active.postMessage({
               type: 'SUPABASE_CONFIG',
@@ -72,12 +61,9 @@ function App() {
             })
           }
         })
-        .catch((error) => {
-          console.log('Service Worker registration failed:', error)
-        })
+        .catch((error) => console.log('SW registration failed:', error))
     }
 
-    // Listen for install prompt
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault()
       setDeferredPrompt(e)
@@ -85,33 +71,7 @@ function App() {
     })
   }, [])
 
-  // Helper to get Category Analysis (Local or Gemini)
-  // Dynamically imports Gemini service to avoid initial load weight
-  const getIntelligentCategory = async (url, metadata, basicAnalysis) => {
-    // 1. Try Gemini if API Key exists
-    if (geminiApiKey) {
-      try {
-        const { analyzeWithGemini } = await import('./geminiService')
-        const geminiResult = await analyzeWithGemini(geminiApiKey, metadata)
-
-        if (geminiResult && geminiResult.category) {
-          console.log("Gemini Suggestion:", geminiResult);
-          return {
-            fullCategory: geminiResult.category,
-            emoji: geminiResult.emoji,
-            source: 'AI'
-          }
-        }
-      } catch (err) {
-        console.error('Gemini analysis failed, falling back to local:', err)
-      }
-    }
-
-    // 2. Fallback to Local Logic
-    return analyzeContentWithMetadata(url, metadata, basicAnalysis)
-  }
-
-  // Handle Share Target API - Check URL params for shared content
+  // Handle Share Target API
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const sharedUrl = urlParams.get('url') || urlParams.get('text')
@@ -119,16 +79,12 @@ function App() {
     const manualMode = urlParams.get('manual') === 'true'
 
     if (sharedUrl && sessionToken) {
-      // Analyze the URL for smart categorization
       const analysis = analyzeUrl(sharedUrl)
       setUrlAnalysis(analysis)
 
-      // AUTO-SAVE MODE: Save directly without showing modal
-      // BUT if manualMode is requested (from Service Worker), skip auto-save
       if (autoSaveMode && !manualMode) {
         autoSaveSharedLink(sharedUrl, sharedTitle, analysis)
       } else {
-        // MANUAL MODE: Show modal for confirmation
         setFormData({
           url: sharedUrl,
           title: sharedTitle || '',
@@ -138,8 +94,6 @@ function App() {
         setItemType('video')
         setIsModalOpen(true)
       }
-
-      // Clean URL params
       window.history.replaceState({}, '', '/')
     }
   }, [sessionToken, autoSaveMode])
@@ -148,25 +102,16 @@ function App() {
   useEffect(() => {
     if (sessionToken) {
       localStorage.setItem('video_vault_token', sessionToken)
-      // Also store in IndexedDB for Service Worker access
-      storeToken(sessionToken).catch(err => console.error('IndexedDB store error:', err))
+      storeToken(sessionToken).catch(err => console.error(err))
       fetchItems()
     } else {
       localStorage.removeItem('video_vault_token')
-      // Also remove from IndexedDB
-      removeToken().catch(err => console.error('IndexedDB remove error:', err))
+      removeToken().catch(err => console.error(err))
       setItems([])
     }
   }, [sessionToken])
 
-  // Persist API Key
-  useEffect(() => {
-    if (geminiApiKey) {
-      localStorage.setItem('gemini_api_key', geminiApiKey)
-    }
-  }, [geminiApiKey])
-
-  // Auto-focus URL input when modal opens
+  // Auto-focus input
   useEffect(() => {
     if (isModalOpen && itemType === 'video' && urlInputRef.current) {
       setTimeout(() => urlInputRef.current?.focus(), 100)
@@ -180,7 +125,7 @@ function App() {
       const { data, error } = await supabase
         .from('items')
         .select('*')
-        .eq('user_token', sessionToken) // Filter by our custom token
+        .eq('user_token', sessionToken)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -194,57 +139,36 @@ function App() {
 
   const categories = ['All', ...new Set(items.map(i => i.category).filter(Boolean))]
 
-  // Extract video ID from YouTube or Instagram URL
   const extractVideoId = (url) => {
     try {
       if (!url) return null
-
-      // YouTube patterns
       if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        // https://www.youtube.com/watch?v=VIDEO_ID
-        if (url.includes('v=')) {
-          return url.split('v=')[1]?.split('&')[0]
-        }
-        // https://youtu.be/VIDEO_ID
-        if (url.includes('youtu.be/')) {
-          return url.split('youtu.be/')[1]?.split('?')[0]
-        }
-        // https://www.youtube.com/embed/VIDEO_ID
-        if (url.includes('embed/')) {
-          return url.split('embed/')[1]?.split('?')[0]
-        }
+        if (url.includes('v=')) return url.split('v=')[1]?.split('&')[0]
+        if (url.includes('youtu.be/')) return url.split('youtu.be/')[1]?.split('?')[0]
+        if (url.includes('embed/')) return url.split('embed/')[1]?.split('?')[0]
       }
-
-      // Instagram patterns
       if (url.includes('instagram.com')) {
-        // https://www.instagram.com/reel/VIDEO_ID/
-        // https://www.instagram.com/p/VIDEO_ID/
         const match = url.match(/\/(reel|p)\/([^\/\?]+)/)
         if (match) return match[2]
       }
-    } catch (e) {
-      console.error('Error extracting video ID', e)
-    }
+    } catch (e) { console.error(e) }
     return null
   }
 
-  // Auto-save shared link without showing modal
   const autoSaveSharedLink = async (url, title, analysis) => {
     try {
       setUploading(true)
-
-      // Fetch rich metadata
       let metadata = null
       let contentAnalysis = null
 
       try {
         metadata = await enrichMetadata(url)
-        contentAnalysis = await getIntelligentCategory(url, metadata, analysis)
+        // Standard Logic Analysis (No Gemini)
+        contentAnalysis = analyzeContentWithMetadata(url, metadata, analysis)
       } catch (err) {
         console.error('Auto-save metadata fetch error:', err)
       }
 
-      // Auto-generate title if empty
       let finalTitle = title
       if (!finalTitle || finalTitle.trim() === '') {
         if (metadata?.title) {
@@ -271,31 +195,20 @@ function App() {
         created_at: new Date().toISOString()
       }
 
-      const { data, error } = await supabase
-        .from('items')
-        .insert([newItem])
-        .select()
-
+      const { data, error } = await supabase.from('items').insert([newItem]).select()
       if (error) throw error
 
-      // Add to items list
       setItems([data[0], ...items])
-
-      // Show success toast
       setToastEmoji(contentAnalysis?.emoji || analysis.emoji || '✅')
       setToastMessage(`Saved to ${newItem.category}!`)
       setShowToast(true)
 
-      // Switch to the category view
-      if (newItem.category) {
-        setActiveCategory(newItem.category)
-      }
+      if (newItem.category) setActiveCategory(newItem.category)
 
     } catch (error) {
       console.error('Error auto-saving:', error.message)
-      // Show error toast
       setToastEmoji('❌')
-      setToastMessage('Failed to save. Please try again.')
+      setToastMessage('Failed to save.')
       setShowToast(true)
     } finally {
       setUploading(false)
@@ -306,20 +219,10 @@ function App() {
     try {
       if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
         const videoId = extractVideoId(url)
-        if (videoId) {
-          return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-        }
+        if (videoId) return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
       }
-    } catch (e) {
-      console.error('Error parsing URL', e)
-    }
+    } catch (e) { console.error(e) }
     return null
-  }
-
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFile(e.target.files[0])
-    }
   }
 
   const handleEdit = (item) => {
@@ -333,11 +236,9 @@ function App() {
       channelName: item.channel_name || ''
     })
 
-    // Set metadata for preview if available
     if (item.metadata) {
       setEnrichedMetadata(item.metadata)
     } else {
-      // Mock metadata from item fields if original metadata json is missing
       setEnrichedMetadata({
         title: item.title,
         thumbnail: item.thumbnail_url || item.image_url,
@@ -346,7 +247,6 @@ function App() {
         description: item.content_description
       })
     }
-
     setIsModalOpen(true)
   }
 
@@ -359,24 +259,15 @@ function App() {
       setUploading(true)
       let imageUrl = null
 
-      // Upload Image if selected
       if (selectedFile) {
         const fileExt = selectedFile.name.split('.').pop()
         const fileName = `${Date.now()}.${fileExt}`
-        const { error: uploadError } = await supabase.storage
-          .from('screenshots')
-          .upload(fileName, selectedFile)
-
+        const { error: uploadError } = await supabase.storage.from('screenshots').upload(fileName, selectedFile)
         if (uploadError) throw uploadError
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('screenshots')
-          .getPublicUrl(fileName)
-
+        const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(fileName)
         imageUrl = publicUrl
       }
 
-      // Auto-generate title if empty (Common definition)
       let finalTitle = formData.title
       if (!finalTitle || finalTitle.trim() === '') {
         if (itemType === 'video') {
@@ -387,50 +278,34 @@ function App() {
         }
       }
 
-      // UPDATE EXISTING ITEM
       if (editingItem) {
+        // UPDATE ITEM
         const updates = {
           type: itemType,
           url: formData.url,
           category: formData.category,
           notes: formData.notes,
           title: finalTitle,
-          // Trust form data for editable fields
           channel_name: formData.channelName,
-
-          // Keep existing image if not replaced
           image_url: imageUrl || editingItem.image_url || enrichedMetadata?.thumbnail || null,
           thumbnail_url: enrichedMetadata?.thumbnail || editingItem.thumbnail_url || null,
-
-          // Metadata fallbacks
           creator_profile: enrichedMetadata?.creatorProfile || editingItem.creator_profile || null,
           content_description: enrichedMetadata?.description || editingItem.content_description || null,
           metadata: enrichedMetadata || editingItem.metadata || null
         }
 
-        // Fix: Update based on ID only. The initial fetch already ensures we own this item.
-        const { data, error } = await supabase
-          .from('items')
-          .update(updates)
-          .eq('id', editingItem.id)
-          .select()
-
+        const { data, error } = await supabase.from('items').update(updates).eq('id', editingItem.id).select()
         if (error) throw error
+        if (!data || data.length === 0) throw new Error("Update failed!")
 
-        if (!data || data.length === 0) {
-          throw new Error("Update failed! Item not found or you don't have permission.")
-        }
-
-        // Update local state with the CONFIRMED data from server
         const updatedItem = data[0]
         setItems(items.map(i => i.id === editingItem.id ? updatedItem : i))
-
         setToastEmoji('✏️')
         setToastMessage('Item updated!')
         setShowToast(true)
 
       } else {
-        // CREATE NEW ITEM
+        // CREATE ITEM
         const newItem = {
           user_token: sessionToken,
           type: itemType,
@@ -447,21 +322,16 @@ function App() {
           created_at: new Date().toISOString()
         }
 
-        const { data, error } = await supabase
-          .from('items')
-          .insert([newItem])
-          .select()
-
+        const { data, error } = await supabase.from('items').insert([newItem]).select()
         if (error) throw error
-
         setItems([data[0], ...items])
-      } // End if/else for Create/Update
+      }
 
       setFormData({ url: '', title: '', category: '', notes: '', channelName: '' })
       setSelectedFile(null)
-      setUrlAnalysis(null) // Reset URL analysis
+      setUrlAnalysis(null)
       setEnrichedMetadata(null)
-      setEditingItem(null) // Clear editing state
+      setEditingItem(null)
       setIsModalOpen(false)
     } catch (error) {
       alert('Error saving item: ' + error.message)
@@ -473,57 +343,35 @@ function App() {
   const deleteItem = async (id) => {
     if (confirm('Are you sure you want to delete this?')) {
       try {
-        const { error } = await supabase
-          .from('items')
-          .delete()
-          .eq('id', id)
-
+        const { error } = await supabase.from('items').delete().eq('id', id)
         if (error) throw error
         setItems(items.filter(i => i.id !== id))
-        // Force refresh
         fetchItems()
       } catch (error) {
-        alert('Error deleting item: ' + error.message)
+        alert('Error: ' + error.message)
       }
     }
   }
 
-  const handleSignOut = () => {
-    setSessionToken(null)
-  }
-
+  const handleSignOut = () => setSessionToken(null)
   const handleInstallClick = async () => {
     if (!deferredPrompt) return
-
     deferredPrompt.prompt()
-    const { outcome } = await deferredPrompt.userChoice
-
-    if (outcome === 'accepted') {
-      console.log('User accepted the install prompt')
-    }
-
     setDeferredPrompt(null)
     setShowInstallButton(false)
   }
-
   const toggleAutoSave = () => {
     const newValue = !autoSaveMode
     setAutoSaveMode(newValue)
     localStorage.setItem('auto_save_mode', newValue.toString())
-
-    // Show toast notification
     setToastEmoji(newValue ? '⚡' : '📝')
     setToastMessage(newValue ? 'Auto-save enabled!' : 'Manual mode enabled')
     setShowToast(true)
   }
 
-  const filteredItems = activeCategory === 'All'
-    ? items
-    : items.filter(i => i.category === activeCategory)
+  const filteredItems = activeCategory === 'All' ? items : items.filter(i => i.category === activeCategory)
 
-  if (!sessionToken) {
-    return <Auth onLogin={(token) => setSessionToken(token)} />
-  }
+  if (!sessionToken) return <Auth onLogin={(token) => setSessionToken(token)} />
 
   return (
     <div className="app-container">
@@ -533,11 +381,7 @@ function App() {
 
       <div className="control-bar">
         {showInstallButton && (
-          <button
-            className="add-btn"
-            onClick={handleInstallClick}
-            style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
-          >
+          <button className="add-btn" onClick={handleInstallClick} style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
             📱 Install App
           </button>
         )}
@@ -545,9 +389,7 @@ function App() {
           className="add-btn"
           onClick={toggleAutoSave}
           style={{
-            background: autoSaveMode
-              ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-              : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+            background: autoSaveMode ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #6366f1, #4f46e5)',
             minWidth: '140px'
           }}
           title={autoSaveMode ? 'Auto-save ON' : 'Manual mode ON'}
@@ -560,12 +402,6 @@ function App() {
           setIsModalOpen(true)
         }}>
           + Add Item
-        </button>
-        <button className="icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings" style={{ marginLeft: '0.5rem' }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
         </button>
         <button className="signout-btn" onClick={handleSignOut}>
           Sign Out
@@ -591,50 +427,35 @@ function App() {
         <div className="video-grid">
           {filteredItems.map(item => (
             <div key={item.id} className={`video-card ${item.type === 'note' ? 'note-card' : ''}`}>
-              {/* Thumbnail / Image Area */}
               <div className="video-thumbnail">
                 {item.image_url ? (
                   <img src={item.image_url} alt={item.title} style={{ objectFit: 'cover' }} />
                 ) : item.type === 'video' && getThumbnail(item.url) ? (
                   <img src={getThumbnail(item.url)} alt={item.title} />
                 ) : (
-                  <div style={{
-                    width: '100%',
-                    height: '100%',
-                    background: 'linear-gradient(45deg, var(--accent-primary), var(--accent-secondary))',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontSize: '3rem'
-                  }}>
+                  <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '3rem' }}>
                     {item.type === 'video' ? '▶' : '📝'}
                   </div>
                 )}
-
-                {/* Badges Overlay */}
                 <div className="thumbnail-badges">
                   <div className="badge-group-left">
                     <span className="video-category-badge">{item.category || 'Uncategorized'}</span>
                   </div>
                 </div>
-
                 {item.type === 'video' && (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="play-overlay"
-                  >
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
-                    </svg>
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="play-overlay">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" /></svg>
                   </a>
                 )}
               </div>
 
               <div className="video-info">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.25rem' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.7 }}>
+                    📅 {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
+                </div>
+
                 <h3 className="video-title">
                   <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
                     {item.title || (item.type === 'video' ? 'Untitled Video' : 'Untitled Note')}
@@ -660,19 +481,7 @@ function App() {
                 ) : (
                   <button
                     onClick={() => handleEdit(item)}
-                    style={{
-                      background: 'none',
-                      border: '1px dashed var(--border-color)',
-                      color: 'var(--text-secondary)',
-                      padding: '0.5rem',
-                      borderRadius: '8px',
-                      fontSize: '0.85rem',
-                      width: '100%',
-                      textAlign: 'left',
-                      marginBottom: '1rem',
-                      cursor: 'pointer',
-                      opacity: 0.7
-                    }}
+                    style={{ background: 'none', border: '1px dashed var(--border-color)', color: 'var(--text-secondary)', padding: '0.5rem', borderRadius: '8px', fontSize: '0.85rem', width: '100%', textAlign: 'left', marginBottom: '1rem', cursor: 'pointer', opacity: 0.7 }}
                     onMouseEnter={e => e.target.style.opacity = '1'}
                     onMouseLeave={e => e.target.style.opacity = '0.7'}
                   >
@@ -680,26 +489,11 @@ function App() {
                   </button>
                 )}
                 <div className="video-actions">
-                  <button
-                    className="icon-btn edit"
-                    onClick={() => handleEdit(item)}
-                    title="Edit"
-                    style={{ marginRight: '0.25rem' }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
+                  <button className="icon-btn edit" onClick={() => handleEdit(item)} title="Edit" style={{ marginRight: '0.25rem' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                   </button>
-                  <button
-                    className="icon-btn delete"
-                    onClick={() => deleteItem(item.id)}
-                    title="Delete"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
+                  <button className="icon-btn delete" onClick={() => deleteItem(item.id)} title="Delete">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                   </button>
                 </div>
               </div>
@@ -708,52 +502,14 @@ function App() {
         </div>
       )}
 
-      <footer style={{
-        textAlign: 'center',
-        padding: '2rem 0',
-        marginTop: 'auto',
-        color: 'var(--text-secondary)',
-        fontSize: '0.875rem',
-        opacity: 0.8
-      }}>
-        <div style={{
-          display: 'inline-block',
-          padding: '0.5rem 1rem',
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))',
-          borderRadius: '20px',
-          border: '1px solid rgba(99, 102, 241, 0.2)',
-          backdropFilter: 'blur(5px)'
-        }}>
-          <span style={{ marginRight: '0.25rem' }}>🚀</span>
-          Developed by <strong style={{
-            background: 'linear-gradient(to right, var(--accent-primary), var(--accent-secondary))',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontWeight: '800'
-          }}>Aniket Patil</strong>
-        </div>
-      </footer>
-
       {isModalOpen && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
           <div className="modal-content">
             <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>{editingItem ? 'Edit Item' : 'Add New Item'}</h2>
-
             <div className="type-selector">
-              <button
-                className={`type-btn ${itemType === 'video' ? 'active' : ''}`}
-                onClick={() => setItemType('video')}
-              >
-                Video Link
-              </button>
-              <button
-                className={`type-btn ${itemType === 'note' ? 'active' : ''}`}
-                onClick={() => setItemType('note')}
-              >
-                Text Note
-              </button>
+              <button className={`type-btn ${itemType === 'video' ? 'active' : ''}`} onClick={() => setItemType('video')}>Video Link</button>
+              <button className={`type-btn ${itemType === 'note' ? 'active' : ''}`} onClick={() => setItemType('note')}>Text Note</button>
             </div>
-
             <form onSubmit={handleSubmit}>
               {itemType === 'video' && (
                 <div className="form-group">
@@ -769,22 +525,14 @@ function App() {
                       onChange={async e => {
                         const newUrl = e.target.value
                         setFormData({ ...formData, url: newUrl })
-
-                        // Analyze URL and auto-suggest category
                         if (newUrl) {
                           const analysis = analyzeUrl(newUrl)
                           setUrlAnalysis(analysis)
-
-                          // Fetch rich metadata
                           setFetchingMetadata(true)
                           try {
                             const metadata = await enrichMetadata(newUrl)
                             setEnrichedMetadata(metadata)
-
-                            // INTELLIGENT ANALYSIS (Gemini or Local)
-                            const contentAnalysis = await getIntelligentCategory(newUrl, metadata, analysis)
-
-                            // Auto-fill category if not already set or if it was auto-suggested before
+                            const contentAnalysis = analyzeContentWithMetadata(newUrl, metadata, analysis)
                             if (!formData.category || urlAnalysis?.suggestedCategory === formData.category) {
                               setFormData(prev => ({
                                 ...prev,
@@ -792,21 +540,9 @@ function App() {
                                 category: contentAnalysis.fullCategory || analysis.suggestedCategory || ''
                               }))
                             }
-
-                            // Auto-fill title if empty
-                            if (!formData.title && metadata.title) {
-                              setFormData(prev => ({ ...prev, title: metadata.title }))
-                            }
-
-                            // Auto-fill channel name
-                            if (!formData.channelName && metadata.channelName) {
-                              setFormData(prev => ({ ...prev, channelName: metadata.channelName }))
-                            }
-                          } catch (err) {
-                            console.error('Metadata fetch error:', err)
-                          } finally {
-                            setFetchingMetadata(false)
-                          }
+                            if (!formData.title && metadata.title) setFormData(prev => ({ ...prev, title: metadata.title }))
+                            if (!formData.channelName && metadata.channelName) setFormData(prev => ({ ...prev, channelName: metadata.channelName }))
+                          } catch (err) { console.error(err) } finally { setFetchingMetadata(false) }
                         } else {
                           setUrlAnalysis(null)
                           setEnrichedMetadata(null)
@@ -814,117 +550,52 @@ function App() {
                       }}
                       style={{ flex: 1 }}
                     />
-                    <button
-                      type="button"
-                      className="add-btn"
-                      onClick={async () => {
-                        try {
-                          const text = await navigator.clipboard.readText()
-                          if (text) {
-                            setFormData({ ...formData, url: text })
-
-                            // Analyze pasted URL
-                            const analysis = analyzeUrl(text)
-                            setUrlAnalysis(analysis)
-
-                            // Fetch rich metadata
-                            setFetchingMetadata(true)
-                            try {
-                              const metadata = await enrichMetadata(text)
-                              setEnrichedMetadata(metadata)
-
-                              const contentAnalysis = await getIntelligentCategory(text, metadata, analysis)
-
-                              setFormData({
-                                ...formData,
-                                url: text,
-                                category: contentAnalysis.fullCategory || analysis.suggestedCategory || '',
-                                title: metadata.title || '',
-                                channelName: metadata.channelName || ''
-                              })
-                            } catch (err) {
-                              console.error('Paste metadata error:', err)
-                            } finally {
-                              setFetchingMetadata(false)
-                            }
-                          }
-                        } catch (err) {
-                          console.error('Clipboard access denied', err)
+                    <button type="button" className="add-btn" onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText()
+                        if (text) {
+                          setFormData({ ...formData, url: text })
+                          const analysis = analyzeUrl(text)
+                          setUrlAnalysis(analysis)
+                          setFetchingMetadata(true)
+                          try {
+                            const metadata = await enrichMetadata(text)
+                            setEnrichedMetadata(metadata)
+                            const contentAnalysis = analyzeContentWithMetadata(text, metadata, analysis)
+                            setFormData({
+                              ...formData,
+                              url: text,
+                              category: contentAnalysis.fullCategory || analysis.suggestedCategory || '',
+                              title: metadata.title || '',
+                              channelName: metadata.channelName || ''
+                            })
+                          } catch (err) { console.error(err) } finally { setFetchingMetadata(false) }
                         }
-                      }}
-                      title="Paste from Clipboard"
-                    >
-                      📋
-                    </button>
+                      } catch (err) { console.error(err) }
+                    }} title="Paste from Clipboard">📋</button>
                   </div>
-                  {fetchingMetadata && (
-                    <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-primary)' }}>
-                      ⚡ {geminiApiKey ? 'Asking AI...' : 'Analyzing content...'}
-                    </div>
-                  )}
-                  {enrichedMetadata && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      Detected: <strong>{enrichedMetadata.title}</strong>
-                    </div>
-                  )}
+                  {fetchingMetadata && <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-primary)' }}>Analyzing content...</div>}
                 </div>
               )}
-
               {itemType === 'video' && (
                 <div className="form-group">
                   <label className="form-label">Channel Name (Optional)</label>
-                  <input
-                    className="form-input"
-                    type="text"
-                    placeholder="e.g. T-Series, MrBeast"
-                    value={formData.channelName}
-                    onChange={e => setFormData({ ...formData, channelName: e.target.value })}
-                  />
+                  <input className="form-input" type="text" placeholder="e.g. T-Series" value={formData.channelName} onChange={e => setFormData({ ...formData, channelName: e.target.value })} />
                 </div>
               )}
-
               <div className="form-group">
                 <label className="form-label">Title (Optional)</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="Summarize this video..."
-                  value={formData.title}
-                  onChange={e => setFormData({ ...formData, title: e.target.value })}
-                />
+                <input className="form-input" type="text" placeholder="Summarize this video..." value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
               </div>
-
               <div className="form-group">
                 <label className="form-label">Category</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    className="form-input"
-                    type="text"
-                    list="category-suggestions"
-                    placeholder="e.g. Music, Cooking, News..."
-                    value={formData.category}
-                    onChange={e => setFormData({ ...formData, category: e.target.value })}
-                    style={{ flex: 1 }}
-                  />
-                  <datalist id="category-suggestions">
-                    {categories.filter(c => c !== 'All').map(cat => (
-                      <option key={cat} value={cat} />
-                    ))}
-                  </datalist>
-                </div>
+                <input className="form-input" type="text" list="category-suggestions" placeholder="e.g. Music, Cooking..." value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} />
+                <datalist id="category-suggestions">{categories.filter(c => c !== 'All').map(cat => <option key={cat} value={cat} />)}</datalist>
               </div>
-
               <div className="form-group">
                 <label className="form-label">Notes (Optional)</label>
-                <textarea
-                  className="form-input"
-                  rows="3"
-                  placeholder="Why is this interesting?"
-                  value={formData.notes}
-                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                />
+                <textarea className="form-input" rows="3" placeholder="Why is this interesting?" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
               </div>
-
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={() => setIsModalOpen(false)}>Cancel</button>
                 <button type="submit" className="submit-btn" disabled={uploading}>
@@ -932,35 +603,6 @@ function App() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* SETTINGS MODAL */}
-      {isSettingsOpen && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsSettingsOpen(false)}>
-          <div className="modal-content">
-            <h2 style={{ marginTop: 0 }}>⚙️ App Settings</h2>
-
-            <div className="form-group">
-              <label className="form-label">Gemini AI API Key</label>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                Your Super-Smart AI categorizer is active!
-              </p>
-              <input
-                className="form-input"
-                type="password"
-                placeholder="Paste AI Key here..."
-                value={geminiApiKey}
-                onChange={e => setGeminiApiKey(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-actions">
-              <button className="submit-btn" onClick={() => setIsSettingsOpen(false)}>
-                Done
-              </button>
-            </div>
           </div>
         </div>
       )}
