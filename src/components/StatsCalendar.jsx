@@ -1,10 +1,19 @@
 import { useState, useMemo } from 'react';
 
-export default function StatsCalendar({ items, onClose }) {
+export default function StatsCalendar({ items = [], onClose }) {
     const [selectedDate, setSelectedDate] = useState(new Date());
+
+    // Defensive Helper for Date Parsing
+    const safeDate = (dateStr) => {
+        if (!dateStr) return null;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        return d;
+    };
 
     // Helper to strip time and compare dates
     const isSameDay = (d1, d2) => {
+        if (!d1 || !d2) return false;
         return d1.getFullYear() === d2.getFullYear() &&
             d1.getMonth() === d2.getMonth() &&
             d1.getDate() === d2.getDate();
@@ -24,13 +33,25 @@ export default function StatsCalendar({ items, onClose }) {
 
     // Calculate Stats for Selected Day
     const dailyStats = useMemo(() => {
-        const dayItems = items.filter(item =>
-            isSameDay(new Date(item.created_at), selectedDate)
-        );
+        // Filter items for the selected day safely
+        const dayItems = items.filter(item => {
+            const d = safeDate(item.created_at);
+            return d && isSameDay(d, selectedDate);
+        });
 
-        // Crash Fix: Added optional chaining (?.) for items without URLs (Notes/Secrets)
-        const youtubeCount = dayItems.filter(i => i.url?.includes('youtube') || i.url?.includes('youtu.be')).length;
-        const instaCount = dayItems.filter(i => i.url?.includes('instagram')).length;
+        // 1. YouTube Count (Videos + Shorts)
+        // Check for 'youtube' in URL OR 'YouTube' in Category name
+        const youtubeCount = dayItems.filter(i =>
+            (i.url?.includes('youtube') || i.url?.includes('youtu.be')) ||
+            (i.category?.includes('YouTube'))
+        ).length;
+
+        // 2. Instagram Count (Reels + Posts)
+        // Check for 'instagram' in URL OR 'Instagram' in Category name
+        const instaCount = dayItems.filter(i =>
+            (i.url?.includes('instagram')) ||
+            (i.category?.includes('Instagram'))
+        ).length;
 
         return {
             total: dayItems.length,
@@ -43,9 +64,11 @@ export default function StatsCalendar({ items, onClose }) {
     // Pre-calculate activity for the whole month to show dots/indicators
     const monthActivity = useMemo(() => {
         const activityMap = {};
+        if (!items) return activityMap;
+
         items.forEach(item => {
-            const d = new Date(item.created_at);
-            if (d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear()) {
+            const d = safeDate(item.created_at);
+            if (d && d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear()) {
                 const day = d.getDate();
                 activityMap[day] = (activityMap[day] || 0) + 1;
             }
@@ -59,11 +82,11 @@ export default function StatsCalendar({ items, onClose }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
             <div className="modal-content" style={{ maxWidth: '500px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <h2 style={{ margin: 0 }}>📅 Activity Cloud</h2>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#fff' }}>✕</button>
                 </div>
 
                 {/* Calendar Header */}
@@ -166,7 +189,8 @@ export default function StatsCalendar({ items, onClose }) {
                                     fontSize: '0.85rem', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
                                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                                 }}>
-                                    {item.category === 'Music' ? '🎵' : item.category === 'Movies' ? '🎬' : '📄'} {item.title || 'Untitled'}
+                                    {item.category === 'Music' ? '🎵' : item.category === 'Movies' ? '🎬' : '📄'}
+                                    {item.type === 'secret' ? '🔒 Secret Item' : (item.title || 'Untitled')}
                                 </div>
                             ))}
                         </div>
