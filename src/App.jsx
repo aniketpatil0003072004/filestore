@@ -25,6 +25,12 @@ function App() {
     return saved !== null ? saved === 'true' : true // Default to true
   })
 
+  // Gemini State - Defaulting to User Provided Key
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    return localStorage.getItem('gemini_api_key') || 'AIzaSyCpYQNUa-r7G_PDDPWpCifR6AIrBdp29lY'
+  })
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+
   // Success toast state
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -79,6 +85,31 @@ function App() {
     })
   }, [])
 
+  // Helper to get Category Analysis (Local or Gemini)
+  // Dynamically imports Gemini service to avoid initial load weight
+  const getIntelligentCategory = async (url, metadata, basicAnalysis) => {
+    // 1. Try Gemini if API Key exists
+    if (geminiApiKey) {
+      try {
+        const { analyzeWithGemini } = await import('./geminiService')
+        const geminiResult = await analyzeWithGemini(geminiApiKey, metadata)
+
+        if (geminiResult && geminiResult.category) {
+          return {
+            fullCategory: geminiResult.category,
+            emoji: geminiResult.emoji,
+            source: 'AI'
+          }
+        }
+      } catch (err) {
+        console.error('Gemini analysis failed, falling back to local:', err)
+      }
+    }
+
+    // 2. Fallback to Local Logic
+    return analyzeContentWithMetadata(url, metadata, basicAnalysis)
+  }
+
   // Handle Share Target API - Check URL params for shared content
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -126,6 +157,13 @@ function App() {
       setItems([])
     }
   }, [sessionToken])
+
+  // Persist API Key
+  useEffect(() => {
+    if (geminiApiKey) {
+      localStorage.setItem('gemini_api_key', geminiApiKey)
+    }
+  }, [geminiApiKey])
 
   // Auto-focus URL input when modal opens
   useEffect(() => {
@@ -200,7 +238,7 @@ function App() {
 
       try {
         metadata = await enrichMetadata(url)
-        contentAnalysis = analyzeContentWithMetadata(url, metadata, analysis)
+        contentAnalysis = await getIntelligentCategory(url, metadata, analysis)
       } catch (err) {
         console.error('Auto-save metadata fetch error:', err)
       }
@@ -243,13 +281,13 @@ function App() {
       setItems([data[0], ...items])
 
       // Show success toast
-      setToastEmoji(analysis.emoji || '✅')
-      setToastMessage(`Saved to ${analysis.suggestedCategory || 'Videos'}!`)
+      setToastEmoji(contentAnalysis?.emoji || analysis.emoji || '✅')
+      setToastMessage(`Saved to ${newItem.category}!`)
       setShowToast(true)
 
       // Switch to the category view
-      if (analysis.suggestedCategory) {
-        setActiveCategory(analysis.suggestedCategory)
+      if (newItem.category) {
+        setActiveCategory(newItem.category)
       }
 
     } catch (error) {
@@ -521,6 +559,12 @@ function App() {
         }}>
           + Add Item
         </button>
+        <button className="icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings" style={{ marginLeft: '0.5rem' }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
         <button className="signout-btn" onClick={handleSignOut}>
           Sign Out
         </button>
@@ -735,8 +779,8 @@ function App() {
                             const metadata = await enrichMetadata(newUrl)
                             setEnrichedMetadata(metadata)
 
-                            // Analyze content with metadata
-                            const contentAnalysis = analyzeContentWithMetadata(newUrl, metadata, analysis)
+                            // INTELLIGENT ANALYSIS (Gemini or Local)
+                            const contentAnalysis = await getIntelligentCategory(newUrl, metadata, analysis)
 
                             // Auto-fill category if not already set or if it was auto-suggested before
                             if (!formData.category || urlAnalysis?.suggestedCategory === formData.category) {
@@ -787,7 +831,7 @@ function App() {
                               const metadata = await enrichMetadata(text)
                               setEnrichedMetadata(metadata)
 
-                              const contentAnalysis = analyzeContentWithMetadata(text, metadata, analysis)
+                              const contentAnalysis = await getIntelligentCategory(text, metadata, analysis)
 
                               setFormData({
                                 ...formData,
@@ -798,83 +842,39 @@ function App() {
                               })
                             } catch (err) {
                               console.error('Paste metadata error:', err)
-                              setFormData({ ...formData, url: text, category: analysis.suggestedCategory || '' })
                             } finally {
                               setFetchingMetadata(false)
                             }
                           }
                         } catch (err) {
-                          alert('Failed to read clipboard. Please paste manually.')
+                          console.error('Clipboard access denied', err)
                         }
                       }}
-                      style={{
-                        padding: '0.75rem 1rem',
-                        whiteSpace: 'nowrap',
-                        fontSize: '0.875rem'
-                      }}
+                      title="Paste from Clipboard"
                     >
-                      📋 Paste
+                      📋
                     </button>
                   </div>
-
-                  {/* Smart Detection Banner */}
-                  {urlAnalysis && urlAnalysis.confidence !== 'low' && (
-                    <div style={{
-                      marginTop: '0.75rem',
-                      padding: '0.75rem 1rem',
-                      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))',
-                      border: '1px solid rgba(99, 102, 241, 0.3)',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      fontSize: '0.875rem',
-                      color: 'var(--text-primary)'
-                    }}>
-                      {fetchingMetadata ? (
-                        <div className="loading-spinner" style={{ width: '20px', height: '20px', border: '2px solid var(--accent-primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                      ) : (
-                        <span style={{ fontSize: '1.25rem' }}>{urlAnalysis.emoji}</span>
-                      )}
-                      <div>
-                        {fetchingMetadata ? (
-                          <strong>Fetching video details...</strong>
-                        ) : (
-                          <>
-                            <strong>Detected:</strong> {enrichedMetadata?.title ? 'Video Found' : urlAnalysis.description}
-                            {enrichedMetadata?.channelName && (
-                              <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>by {enrichedMetadata.channelName}</div>
-                            )}
-                            {formData.category && (
-                              <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
-                                → Category: <strong>{formData.category}</strong>
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
+                  {fetchingMetadata && (
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-primary)' }}>
+                      ⚡ {geminiApiKey ? 'Asking AI...' : 'Analyzing content...'}
+                    </div>
+                  )}
+                  {enrichedMetadata && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      Detected: <strong>{enrichedMetadata.title}</strong>
                     </div>
                   )}
                 </div>
               )}
-              <div className="form-group">
-                <label className="form-label">Title (Optional)</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder={itemType === 'video' ? "Auto-generated if left empty" : "My Note Title"}
-                  value={formData.title}
-                  onChange={e => setFormData({ ...formData, title: e.target.value })}
-                />
-              </div>
 
               {itemType === 'video' && (
                 <div className="form-group">
-                  <label className="form-label">Channel / Author (Optional)</label>
+                  <label className="form-label">Channel Name (Optional)</label>
                   <input
                     className="form-input"
                     type="text"
-                    placeholder="e.g. MKBHD or InstagramUser"
+                    placeholder="e.g. T-Series, MrBeast"
                     value={formData.channelName}
                     onChange={e => setFormData({ ...formData, channelName: e.target.value })}
                   />
@@ -882,223 +882,87 @@ function App() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Category</label>
-
-                {/* Show predefined categories with emojis */}
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '0.5rem',
-                  marginBottom: '0.75rem'
-                }}>
-                  {/* Suggested category first if detected */}
-                  {urlAnalysis && urlAnalysis.suggestedCategory && (
-                    <>
-                      <div style={{
-                        width: '100%',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '0.25rem',
-                        fontWeight: '600'
-                      }}>
-                        ✨ SUGGESTED
-                      </div>
-                      <button
-                        key={urlAnalysis.suggestedCategory}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, category: urlAnalysis.suggestedCategory })}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          borderRadius: '20px',
-                          border: formData.category === urlAnalysis.suggestedCategory
-                            ? '2px solid var(--accent-primary)'
-                            : '2px solid rgba(99, 102, 241, 0.5)',
-                          background: formData.category === urlAnalysis.suggestedCategory
-                            ? 'var(--accent-primary)'
-                            : 'rgba(99, 102, 241, 0.1)',
-                          color: formData.category === urlAnalysis.suggestedCategory
-                            ? 'white'
-                            : 'var(--text-primary)',
-                          cursor: 'pointer',
-                          fontSize: '0.875rem',
-                          fontWeight: '600',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem'
-                        }}
-                      >
-                        {urlAnalysis.emoji} {urlAnalysis.suggestedCategory}
-                      </button>
-                      <div style={{ width: '100%', height: '1px', background: 'var(--border-color)', margin: '0.5rem 0' }} />
-                    </>
-                  )}
-
-                  {/* Show existing user categories */}
-                  {categories.filter(c => c !== 'All').length > 0 && (
-                    <>
-                      <div style={{
-                        width: '100%',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '0.25rem',
-                        fontWeight: '600'
-                      }}>
-                        YOUR CATEGORIES
-                      </div>
-                      {categories.filter(c => c !== 'All' && c !== urlAnalysis?.suggestedCategory).map(cat => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, category: cat })}
-                          style={{
-                            padding: '0.5rem 1rem',
-                            borderRadius: '20px',
-                            border: formData.category === cat
-                              ? '2px solid var(--accent-primary)'
-                              : '1px solid var(--border-color)',
-                            background: formData.category === cat
-                              ? 'var(--accent-primary)'
-                              : 'var(--bg-secondary)',
-                            color: formData.category === cat
-                              ? 'white'
-                              : 'var(--text-primary)',
-                            cursor: 'pointer',
-                            fontSize: '0.875rem',
-                            fontWeight: formData.category === cat ? '600' : '400',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.25rem'
-                          }}
-                          onMouseEnter={e => {
-                            if (formData.category !== cat) {
-                              e.target.style.borderColor = 'var(--accent-primary)'
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            if (formData.category !== cat) {
-                              e.target.style.borderColor = 'var(--border-color)'
-                            }
-                          }}
-                        >
-                          {getCategoryEmoji(cat)} {cat}
-                        </button>
-                      ))}
-                      <div style={{ width: '100%', height: '1px', background: 'var(--border-color)', margin: '0.5rem 0' }} />
-                    </>
-                  )}
-
-                  {/* Show predefined categories */}
-                  <div style={{
-                    width: '100%',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '0.25rem',
-                    fontWeight: '600'
-                  }}>
-                    QUICK SELECT
-                  </div>
-                  {getPredefinedCategories()
-                    .filter(predef =>
-                      !categories.includes(predef.name) &&
-                      predef.name !== urlAnalysis?.suggestedCategory
-                    )
-                    .map(predef => (
-                      <button
-                        key={predef.name}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, category: predef.name })}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          borderRadius: '20px',
-                          border: formData.category === predef.name
-                            ? '2px solid var(--accent-primary)'
-                            : '1px solid var(--border-color)',
-                          background: formData.category === predef.name
-                            ? 'var(--accent-primary)'
-                            : 'var(--bg-secondary)',
-                          color: formData.category === predef.name
-                            ? 'white'
-                            : 'var(--text-primary)',
-                          cursor: 'pointer',
-                          fontSize: '0.875rem',
-                          fontWeight: formData.category === predef.name ? '600' : '400',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem'
-                        }}
-                        onMouseEnter={e => {
-                          if (formData.category !== predef.name) {
-                            e.target.style.borderColor = 'var(--accent-primary)'
-                          }
-                        }}
-                        onMouseLeave={e => {
-                          if (formData.category !== predef.name) {
-                            e.target.style.borderColor = 'var(--border-color)'
-                          }
-                        }}
-                      >
-                        {predef.emoji} {predef.name}
-                      </button>
-                    ))}
-                </div>
-
-                {/* Input for new category or custom entry */}
+                <label className="form-label">Title (Optional)</label>
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="Or type a new category..."
-                  value={formData.category}
-                  onChange={e => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="Summarize this video..."
+                  value={formData.title}
+                  onChange={e => setFormData({ ...formData, title: e.target.value })}
                 />
               </div>
+
               <div className="form-group">
-                <label className="form-label">{itemType === 'video' ? 'Notes (Optional)' : 'Content'}</label>
+                <label className="form-label">Category</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    className="form-input"
+                    type="text"
+                    list="category-suggestions"
+                    placeholder="e.g. Music, Cooking, News..."
+                    value={formData.category}
+                    onChange={e => setFormData({ ...formData, category: e.target.value })}
+                    style={{ flex: 1 }}
+                  />
+                  <datalist id="category-suggestions">
+                    {categories.filter(c => c !== 'All').map(cat => (
+                      <option key={cat} value={cat} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Notes (Optional)</label>
                 <textarea
-                  className="form-textarea"
-                  placeholder={itemType === 'video' ? "Add your thoughts here..." : "Write your note here..."}
+                  className="form-input"
+                  rows="3"
+                  placeholder="Why is this interesting?"
                   value={formData.notes}
                   onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                  required={itemType === 'note'}
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">Screenshot / Image (Optional)</label>
-                <input
-                  className="form-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                />
-              </div>
+
               <div className="modal-actions">
-                <button type="button" className="cancel-btn" onClick={() => setIsModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="add-btn" disabled={uploading}>
-                  {uploading ? 'Toploading...' : (editingItem ? 'Update Item' : `Save ${itemType === 'video' ? 'Video' : 'Note'}`)}
+                <button type="button" className="cancel-btn" onClick={() => setIsModalOpen(false)}>Cancel</button>
+                <button type="submit" className="submit-btn" disabled={uploading}>
+                  {uploading ? 'Saving...' : (editingItem ? 'Update Item' : 'Save Item')}
                 </button>
               </div>
             </form>
           </div>
         </div>
-      )
-      }
+      )}
 
-      {/* Success Toast Notification */}
-      {
-        showToast && (
-          <SuccessToast
-            message={toastMessage}
-            emoji={toastEmoji}
-            onClose={() => setShowToast(false)}
-            duration={3000}
-          />
-        )
-      }
-    </div >
+      {/* SETTINGS MODAL */}
+      {isSettingsOpen && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsSettingsOpen(false)}>
+          <div className="modal-content">
+            <h2 style={{ marginTop: 0 }}>⚙️ App Settings</h2>
+
+            <div className="form-group">
+              <label className="form-label">Gemini AI API Key</label>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                Your Super-Smart AI categorizer is active!
+              </p>
+              <input
+                className="form-input"
+                type="password"
+                placeholder="Paste AI Key here..."
+                value={geminiApiKey}
+                onChange={e => setGeminiApiKey(e.target.value)}
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button className="submit-btn" onClick={() => setIsSettingsOpen(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
