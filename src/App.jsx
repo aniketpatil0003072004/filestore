@@ -186,7 +186,6 @@ function App() {
     setTempPassword('');
   }
 
-  // Decrypted Item Renderer
   const DecryptedNote = ({ item, password }) => {
     const [content, setContent] = useState('Decrypting...');
     const [error, setError] = useState(false);
@@ -282,7 +281,7 @@ function App() {
       url: item.url || '',
       title: item.title || '',
       category: item.category || '',
-      description: item.type === 'secret' ? '*** Encrypted ***' : (item.notes || ''), // Don't show raw encrypted text
+      description: item.type === 'secret' ? '*** Encrypted ***' : (item.notes || ''),
       userTag: item.metadata?.user_tag || '',
       channelName: item.channel_name || ''
     })
@@ -313,9 +312,15 @@ function App() {
           setUploading(false);
           return;
         }
-        // Encrypt the description with the Master Password
         try {
-          finalDescription = await encryptData(formData.description, masterPassword);
+          // Only encrypt if it's not the placeholder
+          if (formData.description !== '*** Encrypted ***') {
+            finalDescription = await encryptData(formData.description, masterPassword);
+          } else {
+            // If user saved without changing placeholder, keep original (if editing)
+            // But here we are creating/updating.
+            // Usually editingItem handles this.
+          }
           finalCategory = '🔒 Security';
           finalTitle = '🔒 ' + (formData.title || 'Secret Note');
         } catch (err) {
@@ -326,20 +331,15 @@ function App() {
       }
 
       if (editingItem) {
-        // ... (Update Logic - Simplified for brevity)
         const baseMetadata = editingItem.metadata || {};
         const finalMetadata = { ...baseMetadata, user_tag: formData.userTag };
 
-        // Prevent overwriting encrypted content with "*** Encrypted ***" placeholder if user didn't change it
-        // In a real app, we'd decrypt first in the modal. For now, simple add/delete is safer.
         let updates = {
           metadata: finalMetadata
         }
 
-        // Only update notes if it's NOT a secret being blindly edited, or if we handled decryption (TODO)
-        // For now, allow Tag updates on secrets easily.
-        if (itemType !== 'secret') {
-          updates.notes = formData.description;
+        if (itemType !== 'secret' || formData.description !== '*** Encrypted ***') {
+          updates.notes = finalDescription;
         }
 
         const { data, error } = await supabase.from('items').update(updates).eq('id', editingItem.id).select()
@@ -351,28 +351,32 @@ function App() {
         setShowToast(true)
 
       } else {
-        // CREATE NEW ITEM
+        // CREATE NEW ITEM - FULL RESTORED LOGIC
         let imageUrl = null
         if (selectedFile) {
-          // ... (Image upload logic)
+          const fileExt = selectedFile.name.split('.').pop()
+          const fileName = `${Date.now()}.${fileExt}`
+          const { error: upload } = await supabase.storage.from('screenshots').upload(fileName, selectedFile)
+          if (!upload) {
+            const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(fileName)
+            imageUrl = publicUrl
+          }
         }
 
         let newItem = {
           user_token: sessionToken,
-          type: itemType, // 'video', 'note', or 'secret'
+          type: itemType,
           url: formData.url,
           category: finalCategory || formData.category,
-          notes: finalDescription, // ENCRYPTED CONTENT HERE IF SECRET
+          notes: finalDescription,
           metadata: { user_tag: formData.userTag },
           title: finalTitle,
-          image_url: null,
+          image_url: imageUrl,
           created_at: new Date().toISOString()
         }
 
         // Handle Video Specifics
         if (itemType === 'video') {
-          // ... (Video Metadata Fetching - Same as before)
-          // simplified for reading
           let videoId = extractVideoId(formData.url)
           newItem.title = videoId ? `Video ${videoId}` : 'Untitled'
           try {
@@ -382,7 +386,7 @@ function App() {
             newItem.category = contentAnalysis.fullCategory;
             newItem.metadata = { ...metadata, user_tag: formData.userTag }
             newItem.title = metadata.title || newItem.title;
-            newItem.image_url = metadata.thumbnail;
+            newItem.image_url = metadata.thumbnail || imageUrl;
           } catch (e) { }
         }
 
@@ -418,8 +422,20 @@ function App() {
   }
 
   const handleSignOut = () => setSessionToken(null)
-  const handleInstallClick = async () => setDeferredPrompt(null) // simplified
-  const toggleAutoSave = () => { /* ... existing ... */ }
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return
+    deferredPrompt.prompt()
+    setDeferredPrompt(null)
+    setShowInstallButton(false)
+  }
+  const toggleAutoSave = () => {
+    const newValue = !autoSaveMode
+    setAutoSaveMode(newValue)
+    localStorage.setItem('auto_save_mode', newValue.toString())
+    setToastEmoji(newValue ? '⚡' : '📝')
+    setToastMessage(newValue ? 'Auto-save enabled!' : 'Manual mode enabled')
+    setShowToast(true)
+  }
 
   const handleCategoryClick = (cat) => {
     if (cat === '🔒 Security' && !isSecretsUnlocked) {
@@ -431,8 +447,6 @@ function App() {
   }
 
   // Filter Logic:
-  // If 'Security' is active, show only type='secret'
-  // Else show everything EXCEPT type='secret' (unless specific tag logic used later)
   const filteredItems = activeTag
     ? items.filter(i => i.metadata?.user_tag === activeTag && (i.type !== 'secret' || isSecretsUnlocked))
     : activeCategory === '🔒 Security'
@@ -451,12 +465,20 @@ function App() {
       </header>
 
       <div className="control-bar">
-        {/* ... (Existing Buttons) ... */}
+        {showInstallButton && (
+          <button className="add-btn" onClick={handleInstallClick} style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+            📱 Install App
+          </button>
+        )}
+        <button className="add-btn" onClick={toggleAutoSave} style={{ background: autoSaveMode ? '#f59e0b' : '#6366f1', minWidth: '140px' }}>
+          {autoSaveMode ? '⚡ Auto-Save' : '📝 Manual'}
+        </button>
         <button className="add-btn" onClick={() => {
           setEditingItem(null)
           setFormData({ url: '', title: '', category: '', description: '', userTag: '', channelName: '' })
           setIsModalOpen(true)
         }}> + Add Item </button>
+        <button className="icon-btn" onClick={() => setShowStats(true)}>📅</button>
         <button className="signout-btn" onClick={handleSignOut}>Sign Out</button>
       </div>
 
@@ -472,7 +494,25 @@ function App() {
         ))}
       </div>
 
-      {/* ... (My Tags Section, etc - kept same) ... */}
+      {userTags.length > 0 && (
+        <div className="categories" style={{ marginTop: '0.5rem', paddingTop: '0' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginRight: '0.5rem', alignSelf: 'center' }}>
+            🏷️ My Tags:
+          </span>
+          {userTags.map(tag => (
+            <button key={tag}
+              className={`category-pill ${activeTag === tag ? 'active' : ''}`}
+              style={{
+                border: '1px dashed var(--accent-primary)',
+                background: activeTag === tag ? 'var(--accent-primary)' : 'transparent'
+              }}
+              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* PASSWORD PROMPT MODAL */}
       {showPasswordPrompt && (
@@ -506,15 +546,25 @@ function App() {
               {/* CONTENT RENDERING */}
               {item.type === 'video' && (
                 <div className="video-thumbnail" style={{ position: 'relative' }}>
-                  {/* ... (Existing Thumbnail Logic) ... */}
-                  {item.image_url ? <img src={item.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
-                  {(!item.image_url && item.url && item.url.includes('instagram.com')) && (
-                    <div style={{ width: '100%', height: '100%', background: 'linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                      <span style={{ fontSize: '3rem' }}>📸</span><span style={{ fontWeight: 600 }}>View Reel</span>
-                    </div>
+                  {item.image_url ? <img src={item.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex' }} /> : null}
+
+                  {(!item.image_url && item.type === 'video' && getThumbnail(item.url)) && (
+                    <img src={getThumbnail(item.url)} alt="" />
                   )}
+
+                  <div className="insta-fallback" style={{
+                    display: (!item.image_url && item.url && item.url.includes('instagram.com')) ? 'flex' : 'none',
+                    width: '100%', height: '100%',
+                    position: item.image_url ? 'absolute' : 'relative', top: 0, left: 0,
+                    background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
+                    flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white'
+                  }}>
+                    <span style={{ fontSize: '3rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}>📸</span>
+                    <span style={{ fontSize: '1rem', fontWeight: '600', marginTop: '0.5rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>View Reel</span>
+                  </div>
+
                   {/* Default fallback */}
-                  {(!item.image_url && !item.url?.includes('instagram.com')) && <div style={{ width: '100%', height: '150px', background: '#333' }}></div>}
+                  {(!item.image_url && !getThumbnail(item.url) && !item.url?.includes('instagram.com')) && <div style={{ width: '100%', height: '100%', minHeight: '180px', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📝</div>}
 
                   <a href={item.url} target="_blank" className="play-overlay">▶</a>
                 </div>
@@ -522,7 +572,7 @@ function App() {
 
               <div className="video-info">
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.7 }}>
-                  📅 {new Date(item.created_at).toLocaleDateString()}
+                  📅 {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
 
                 <h3 className="video-title">
@@ -537,13 +587,25 @@ function App() {
                     *** Encrypted Content ***
                   </div>
                 ) : (
-                  <p style={{ marginTop: '0.5rem' }}>{item.notes}</p>
+                  <p style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{item.notes}</p>
                 )}
 
                 {/* Tag Display ... */}
-                {item.metadata?.user_tag && <div className="video-tag" style={{ marginTop: '0.5rem' }}>📌 {item.metadata.user_tag}</div>}
+                {item.metadata?.user_tag && (
+                  <div className="video-tag" style={{
+                    display: 'inline-block', marginTop: '0.5rem', marginBottom: '0.25rem',
+                    padding: '4px 10px', borderRadius: '6px',
+                    background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)',
+                    color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: '700'
+                  }}>
+                    📌 {item.metadata.user_tag}
+                  </div>
+                )}
 
                 <div className="video-actions">
+                  <button className="add-btn" onClick={() => handleEdit(item)} style={{ padding: '4px 12px', fontSize: '0.8rem', marginRight: 'auto', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+                    🏷️ Tag
+                  </button>
                   <button className="icon-btn delete" onClick={() => deleteItem(item.id)}>🗑️</button>
                 </div>
               </div>
@@ -551,6 +613,8 @@ function App() {
           ))}
         </div>
       )}
+
+      {showStats && <StatsCalendar items={items} onClose={() => setShowStats(false)} />}
 
       {/* ADD/EDIT MODAL */}
       {isModalOpen && (
@@ -587,7 +651,36 @@ function App() {
               {/* Tags */}
               <div className="form-group">
                 <label className="form-label">🏷️ Tag</label>
-                <input className="form-input" type="text" value={formData.userTag} onChange={e => setFormData({ ...formData, userTag: e.target.value })} />
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Type or Select Tag..."
+                  value={formData.userTag}
+                  onChange={e => setFormData({ ...formData, userTag: e.target.value })}
+                />
+                {userTags.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    {userTags.map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, userTag: tag })}
+                        style={{
+                          background: formData.userTag === tag ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
+                          color: formData.userTag === tag ? '#fff' : 'var(--text-secondary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '12px',
+                          padding: '4px 10px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
