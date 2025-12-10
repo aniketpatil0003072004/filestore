@@ -4,7 +4,7 @@ import Auth from './Auth'
 import { analyzeUrl, getPredefinedCategories, getCategoryEmoji } from './urlAnalyzer'
 import { storeToken, removeToken } from './indexedDBHelper'
 import SuccessToast from './components/SuccessToast'
-import StatsCalendar from './components/StatsCalendar' // New Import
+import StatsCalendar from './components/StatsCalendar'
 import { enrichMetadata } from './metadataFetcher'
 import { analyzeContentWithMetadata } from './categoryHelper'
 import './App.css'
@@ -14,7 +14,7 @@ function App() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [showStats, setShowStats] = useState(false) // New Stats Modal State
+  const [showStats, setShowStats] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [uploading, setUploading] = useState(false)
@@ -37,7 +37,7 @@ function App() {
     url: '',
     title: '',
     category: '',
-    notes: '',
+    notes: '', // Used for "Tag" now
     channelName: ''
   })
   const [selectedFile, setSelectedFile] = useState(null)
@@ -483,18 +483,26 @@ function App() {
                   </div>
                 )}
 
+                {/* NEW TAG DISPLAY: REPLACED NOTES PARAGRAPH */}
                 {item.notes ? (
-                  <p className="video-notes">{item.notes}</p>
+                  <div className="video-tag" style={{
+                    display: 'inline-block',
+                    marginTop: '0.5rem',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(99, 102, 241, 0.1)',
+                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                    color: 'var(--accent-primary)',
+                    fontSize: '0.8rem',
+                    fontWeight: '600'
+                  }}>
+                    📌 {item.notes}
+                  </div>
                 ) : (
-                  <button
-                    onClick={() => handleEdit(item)}
-                    style={{ background: 'none', border: '1px dashed var(--border-color)', color: 'var(--text-secondary)', padding: '0.5rem', borderRadius: '8px', fontSize: '0.85rem', width: '100%', textAlign: 'left', marginBottom: '1rem', cursor: 'pointer', opacity: 0.7 }}
-                    onMouseEnter={e => e.target.style.opacity = '1'}
-                    onMouseLeave={e => e.target.style.opacity = '0.7'}
-                  >
-                    + Add description / notes...
-                  </button>
+                  /* REMOVED THE 'ADD DESCRIPTION' BUTTON AS REQUESTED */
+                  <div style={{ marginBottom: '1rem' }}></div>
                 )}
+
                 <div className="video-actions">
                   <button className="icon-btn edit" onClick={() => handleEdit(item)} title="Edit" style={{ marginRight: '0.25rem' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -602,10 +610,19 @@ function App() {
                 <input className="form-input" type="text" list="category-suggestions" placeholder="e.g. Music, Cooking..." value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} />
                 <datalist id="category-suggestions">{categories.filter(c => c !== 'All').map(cat => <option key={cat} value={cat} />)}</datalist>
               </div>
+
+              {/* UPDATED TAG INPUT - REPLACED NOTES TEXTAREA */}
               <div className="form-group">
-                <label className="form-label">Notes (Optional)</label>
-                <textarea className="form-input" rows="3" placeholder="Why is this interesting?" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                <label className="form-label">Tag / Topic (What is this about?)</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="e.g. Trip to Goa, Funny Prank, React Tutorial"
+                  value={formData.notes} // We use the existing 'notes' field for Tags
+                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                />
               </div>
+
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={() => setIsModalOpen(false)}>Cancel</button>
                 <button type="submit" className="submit-btn" disabled={uploading}>
