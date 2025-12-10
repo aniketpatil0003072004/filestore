@@ -1,23 +1,16 @@
 import { useState, useMemo } from 'react';
 
-export default function StatsCalendar({ items = [], onClose }) {
+export default function StatsCalendar({ items, onClose }) {
     const [selectedDate, setSelectedDate] = useState(new Date());
 
-    // Defensive Helper
-    const safeDate = (dateStr) => {
-        if (!dateStr) return null;
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return null;
-        return d;
-    };
-
+    // Helper to strip time and compare dates
     const isSameDay = (d1, d2) => {
-        if (!d1 || !d2) return false;
         return d1.getFullYear() === d2.getFullYear() &&
             d1.getMonth() === d2.getMonth() &&
             d1.getDate() === d2.getDate();
     };
 
+    // Generate calendar grid
     const getDaysInMonth = (date) => {
         const year = date.getFullYear();
         const month = date.getMonth();
@@ -31,34 +24,28 @@ export default function StatsCalendar({ items = [], onClose }) {
 
     // Calculate Stats for Selected Day
     const dailyStats = useMemo(() => {
-        if (!items || !Array.isArray(items)) return { total: 0, youtube: 0, instagram: 0, secrets: 0, items: [] };
+        const dayItems = items.filter(item =>
+            isSameDay(new Date(item.created_at), selectedDate)
+        );
 
-        const dayItems = items.filter(item => {
-            const itemDate = safeDate(item.created_at);
-            return itemDate && isSameDay(itemDate, selectedDate);
-        });
-
-        const youtubeCount = dayItems.filter(i => i.url && (i.url.includes('youtube') || i.url.includes('youtu.be'))).length;
-        const instaCount = dayItems.filter(i => i.url && i.url.includes('instagram')).length;
-        const secretsCount = dayItems.filter(i => i.category === '🔒 Security').length;
+        // Crash Fix: Added optional chaining (?.) for items without URLs (Notes/Secrets)
+        const youtubeCount = dayItems.filter(i => i.url?.includes('youtube') || i.url?.includes('youtu.be')).length;
+        const instaCount = dayItems.filter(i => i.url?.includes('instagram')).length;
 
         return {
             total: dayItems.length,
             youtube: youtubeCount,
             instagram: instaCount,
-            secrets: secretsCount,
             items: dayItems
         };
     }, [selectedDate, items]);
 
-    // Pre-calculate activity
+    // Pre-calculate activity for the whole month to show dots/indicators
     const monthActivity = useMemo(() => {
-        if (!items || !Array.isArray(items)) return {};
-
         const activityMap = {};
         items.forEach(item => {
-            const d = safeDate(item.created_at);
-            if (d && d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear()) {
+            const d = new Date(item.created_at);
+            if (d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear()) {
                 const day = d.getDate();
                 activityMap[day] = (activityMap[day] || 0) + 1;
             }
@@ -72,22 +59,21 @@ export default function StatsCalendar({ items = [], onClose }) {
     };
 
     return (
-        <div className="modal-overlay" style={{ display: 'flex', zIndex: 9999 }} onClick={(e) => {
-            e.stopPropagation();
-            if (e.target === e.currentTarget) onClose();
-        }}>
-            <div className="modal-content" style={{ maxWidth: '500px', margin: 'auto' }}>
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+            <div className="modal-content" style={{ maxWidth: '500px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <h2 style={{ margin: 0 }}>📅 Activity Cloud</h2>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#fff' }}>✕</button>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
                 </div>
 
+                {/* Calendar Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', padding: '0 1rem' }}>
                     <button onClick={() => changeMonth(-1)} className="icon-btn">◀</button>
                     <h3 style={{ margin: 0 }}>{monthName}</h3>
                     <button onClick={() => changeMonth(1)} className="icon-btn">▶</button>
                 </div>
 
+                {/* Calendar Grid */}
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(7, 1fr)',
@@ -99,10 +85,12 @@ export default function StatsCalendar({ items = [], onClose }) {
                         <div key={d} style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>{d}</div>
                     ))}
 
+                    {/* Empty slots for start of month */}
                     {Array.from({ length: firstDay }).map((_, i) => (
                         <div key={`empty-${i}`} />
                     ))}
 
+                    {/* Days */}
                     {Array.from({ length: days }).map((_, i) => {
                         const day = i + 1;
                         const isSelected = day === selectedDate.getDate();
@@ -136,6 +124,7 @@ export default function StatsCalendar({ items = [], onClose }) {
                     })}
                 </div>
 
+                {/* Stats Panel */}
                 <div style={{
                     background: 'rgba(255,255,255,0.03)',
                     borderRadius: '12px',
@@ -147,21 +136,25 @@ export default function StatsCalendar({ items = [], onClose }) {
                         <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{dailyStats.total} Total</span>
                     </h4>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0.5rem', background: '#FF000015', borderRadius: '10px', border: '1px solid #FF000030' }}>
-                            <span style={{ fontSize: '1.2rem' }}>📺</span>
-                            <span style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '0.25rem' }}>{dailyStats.youtube}</span>
-                            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>YouTube</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            padding: '1rem', background: '#FF000015', borderRadius: '10px',
+                            border: '1px solid #FF000030'
+                        }}>
+                            <span style={{ fontSize: '1.5rem' }}>📺</span>
+                            <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '0.25rem' }}>{dailyStats.youtube}</span>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>YouTube</span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0.5rem', background: '#C1358415', borderRadius: '10px', border: '1px solid #C1358430' }}>
-                            <span style={{ fontSize: '1.2rem' }}>📸</span>
-                            <span style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '0.25rem' }}>{dailyStats.instagram}</span>
-                            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>Insta</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0.5rem', background: '#333', borderRadius: '10px', border: '1px solid #555' }}>
-                            <span style={{ fontSize: '1.2rem' }}>🔒</span>
-                            <span style={{ fontWeight: 'bold', fontSize: '1rem', marginTop: '0.25rem' }}>{dailyStats.secrets}</span>
-                            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>Secrets</span>
+
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            padding: '1rem', background: '#C1358415', borderRadius: '10px',
+                            border: '1px solid #C1358430'
+                        }}>
+                            <span style={{ fontSize: '1.5rem' }}>📸</span>
+                            <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '0.25rem' }}>{dailyStats.instagram}</span>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Instagram</span>
                         </div>
                     </div>
 
@@ -173,13 +166,13 @@ export default function StatsCalendar({ items = [], onClose }) {
                                     fontSize: '0.85rem', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
                                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                                 }}>
-                                    {item.type === 'secret' ? '🔒' : item.category === 'Music' ? '🎵' : item.category === 'Movies' ? '🎬' : '📄'}
-                                    {item.type === 'secret' ? ' (Secret Item)' : (item.title || 'Untitled')}
+                                    {item.category === 'Music' ? '🎵' : item.category === 'Movies' ? '🎬' : '📄'} {item.title || 'Untitled'}
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
+
             </div>
         </div>
     );
