@@ -8,6 +8,7 @@ import StatsCalendar from './components/StatsCalendar'
 import { enrichMetadata } from './metadataFetcher'
 import { analyzeContentWithMetadata } from './categoryHelper'
 import { encryptData, decryptData } from './cryptoHelper'
+import { extractTextFromPdf, summarizeTextWithGemini } from './pdfHelper'
 import './App.css'
 
 function App() {
@@ -59,6 +60,121 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [urlAnalysis, setUrlAnalysis] = useState(null)
   const [enrichedMetadata, setEnrichedMetadata] = useState(null)
+
+  // PDF & AI State
+  const [pdfFile, setPdfFile] = useState(null)
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_api_key') || '')
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [summary, setSummary] = useState('')
+
+  // CAMERA STATE
+  const [showCamera, setShowCamera] = useState(false)
+  const [cameraMode, setCameraMode] = useState('photo') // 'photo' or 'video'
+  const [isRecording, setIsRecording] = useState(false)
+  const [stream, setStream] = useState(null)
+  const videoPreviewRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const recordedChunksRef = useRef([])
+
+  const startCamera = async (mode) => {
+    try {
+      setCameraMode(mode)
+      setShowCamera(true)
+      setIsModalOpen(false) // Close add item modal
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }, // Prefer back camera on mobile
+        audio: mode === 'video'
+      })
+      setStream(mediaStream)
+    } catch (err) {
+      alert("Could not access camera: " + err.message)
+      setShowCamera(false)
+    }
+  }
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop())
+      setStream(null)
+    }
+    setShowCamera(false)
+    setIsRecording(false)
+    recordedChunksRef.current = []
+  }
+
+  useEffect(() => {
+    if (showCamera && videoPreviewRef.current && stream) {
+      videoPreviewRef.current.srcObject = stream
+    }
+  }, [showCamera, stream])
+
+  const capturePhoto = async () => {
+    if (!videoPreviewRef.current) return
+    const canvas = document.createElement('canvas')
+    canvas.width = videoPreviewRef.current.videoWidth
+    canvas.height = videoPreviewRef.current.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(videoPreviewRef.current, 0, 0)
+    canvas.toBlob(async (blob) => {
+      saveCapturedMedia(blob, 'photo')
+    }, 'image/jpeg')
+  }
+
+  const startRecording = () => {
+    if (!stream) return
+    recordedChunksRef.current = []
+    const recorder = new MediaRecorder(stream)
+    mediaRecorderRef.current = recorder
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data)
+    }
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
+      saveCapturedMedia(blob, 'video')
+    }
+    recorder.start()
+    setIsRecording(true)
+  }
+
+  const stopCaptureRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop()
+    }
+  }
+
+  const saveCapturedMedia = async (blob, type) => {
+    if (blob.size === 0) return
+    try {
+      setUploading(true)
+      const ext = type === 'photo' ? 'jpg' : 'webm'
+      const fileName = `capture_${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('screenshots').upload(fileName, blob)
+      if (uploadErr) throw uploadErr
+
+      const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(fileName)
+
+      const newItem = {
+        user_token: sessionToken,
+        type: type === 'photo' ? 'photo' : 'video',
+        url: publicUrl,
+        title: type === 'photo' ? 'Captured Photo' : 'Captured Video',
+        category: type === 'photo' ? '📸 Photos' : '🎥 Videos',
+        notes: '',
+        created_at: new Date().toISOString()
+      }
+      const { data, error } = await supabase.from('items').insert([newItem]).select()
+      if (error) throw error
+      setItems([data[0], ...items])
+      stopCamera()
+      setToastMessage(type === 'photo' ? 'Photo Saved!' : 'Video Saved!')
+      setShowToast(true)
+      setActiveCategory(newItem.category)
+    } catch (e) {
+      alert("Error saving media: " + e.message)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const urlInputRef = useRef(null)
 
@@ -377,6 +493,8 @@ function App() {
       if (itemType === 'video' && !formData.url) return
       if (itemType === 'note' && !formData.description) return
       if (itemType === 'secret' && !formData.description) return
+      if (itemType === 'pdf' && !pdfFile && !formData.url) return // PDF needs file or URL
+
     }
 
     try {
@@ -451,8 +569,30 @@ function App() {
           metadata: { user_tag: formData.userTag },
           title: finalTitle,
           image_url: imageUrl,
+          image_url: imageUrl,
           created_at: new Date().toISOString()
         }
+
+        // --- PDF HANDLING ---
+        if (itemType === 'pdf') {
+          // 1. Upload PDF
+          let pdfUrl = null;
+          if (pdfFile) {
+            const fileExt = pdfFile.name.split('.').pop();
+            const fileName = `doc_${Date.now()}.${fileExt}`;
+            const { error: uploadErr } = await supabase.storage.from('screenshots').upload(fileName, pdfFile);
+            if (!uploadErr) {
+              const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(fileName);
+              pdfUrl = publicUrl;
+            }
+          }
+
+          newItem.url = pdfUrl || formData.url; // URL to the file
+          newItem.title = formData.title || (pdfFile ? pdfFile.name : 'Untitled PDF');
+          newItem.category = '📄 Documents'; // New Category
+          newItem.notes = summary ? `**AI Summary:**\n${summary}\n\n---\n${formData.description}` : formData.description;
+        }
+        // --------------------
 
         if (itemType === 'video') {
           let videoId = extractVideoId(formData.url)
@@ -475,6 +615,8 @@ function App() {
 
       setFormData({ url: '', title: '', category: '', description: '', userTag: '', channelName: '' })
       setSelectedFile(null)
+      setPdfFile(null)
+      setSummary('')
       setUrlAnalysis(null)
       setEnrichedMetadata(null)
       setEditingItem(null)
@@ -664,6 +806,26 @@ function App() {
                     <img src={getThumbnail(item.url)} alt="" />
                   )}
 
+                  {/* DISPLAY PHOTO */}
+                  {item.type === 'photo' && (
+                    <img src={item.url} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  )}
+
+                  {/* DISPLAY PDF */}
+                  {item.type === 'pdf' && (
+                    <div style={{ width: '100%', height: '100%', background: '#ff5252', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                      <span style={{ fontSize: '3rem' }}>📄</span>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'white', marginTop: '1rem', textDecoration: 'underline', fontWeight: 'bold', pointerEvents: 'auto', zIndex: 10 }}>Download / View PDF</a>
+                    </div>
+                  )}
+
+                  {/* DISPLAY RECORDED VIDEO (no thumbnail) */}
+                  {item.type === 'video' && !getThumbnail(item.url) && !item.url.includes('instagram') && (
+                    <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <video src={item.url} controls style={{ width: '100%', maxHeight: '100%' }} />
+                    </div>
+                  )}
+
                   <div className="insta-fallback" style={{
                     display: (!item.image_url && item.url && item.url.includes('instagram.com')) ? 'flex' : 'none',
                     width: '100%', height: '100%',
@@ -735,6 +897,9 @@ function App() {
               <div className="type-selector">
                 <button className={`type-btn ${itemType === 'video' ? 'active' : ''}`} onClick={() => setItemType('video')}>Video</button>
                 <button className={`type-btn ${itemType === 'note' ? 'active' : ''}`} onClick={() => setItemType('note')}>Note</button>
+                <button className={`type-btn ${itemType === 'pdf' ? 'active' : ''}`} onClick={() => setItemType('pdf')}>📄 PDF</button>
+                <button className={`type-btn ${itemType === 'photo' ? 'active' : ''}`} onClick={() => startCamera('photo')}>📸 Photo</button>
+                <button className={`type-btn ${itemType === 'record' ? 'active' : ''}`} onClick={() => startCamera('video')}>📹 Record</button>
                 <button className={`type-btn ${itemType === 'secret' ? 'active' : ''}`} onClick={() => {
                   if (!isSecretsUnlocked) { setShowPasswordPrompt(true); setIsModalOpen(false); return; }
                   setItemType('secret');
@@ -803,6 +968,63 @@ function App() {
                 />
               </div>
 
+              {/* PDF SPECIFIC UI */}
+              {!editingItem && itemType === 'pdf' && (
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                  <label className="form-label">Upload PDF</label>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    className="form-input"
+                    onChange={(e) => setPdfFile(e.target.files[0])}
+                  />
+
+                  <div style={{ marginTop: '1rem' }}>
+                    <label className="form-label">Gemini API Key (for AI Summary)</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      placeholder="Paste your Gemini API Key..."
+                      value={geminiKey}
+                      onChange={(e) => {
+                        setGeminiKey(e.target.value);
+                        localStorage.setItem('gemini_api_key', e.target.value);
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!pdfFile) return alert("Select a PDF first!");
+                      if (!geminiKey) return alert("Enter Gemini API Key!");
+                      setIsSummarizing(true);
+                      try {
+                        const text = await extractTextFromPdf(pdfFile);
+                        const aiSummary = await summarizeTextWithGemini(text, geminiKey);
+                        setSummary(aiSummary);
+                        setFormData(prev => ({ ...prev, description: aiSummary })); // Auto-fill description
+                      } catch (err) {
+                        alert("Error: " + err.message);
+                      } finally {
+                        setIsSummarizing(false);
+                      }
+                    }}
+                    className="add-btn"
+                    disabled={isSummarizing}
+                    style={{ marginTop: '1rem', width: '100%', background: isSummarizing ? '#666' : 'linear-gradient(135deg, #8b5cf6, #d946ef)' }}
+                  >
+                    {isSummarizing ? 'Analyzing PDF...' : '✨ Summarize with AI'}
+                  </button>
+
+                  {summary && (
+                    <div style={{ marginTop: '1rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', fontSize: '0.85rem' }}>
+                      <strong>Preview:</strong> {summary.substring(0, 100)}...
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="modal-actions">
                 <button type="button" className="cancel-btn" onClick={() => setIsModalOpen(false)}>Cancel</button>
                 <button type="submit" className="submit-btn" disabled={uploading}>
@@ -810,6 +1032,38 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CAMERA MODAL */}
+      {showCamera && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ width: '100%', maxWidth: '600px', padding: '1rem', background: '#000' }}>
+            <h3 style={{ color: 'white', margin: '0 0 1rem 0' }}>
+              {cameraMode === 'photo' ? '📸 Take Photo' : '📹 Record Video'}
+            </h3>
+
+            <div style={{ position: 'relative', width: '100%', height: '0', paddingBottom: '75%', background: '#222', borderRadius: '12px', overflow: 'hidden' }}>
+              <video ref={videoPreviewRef} autoPlay playsInline muted style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+              {isRecording && (
+                <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'red', color: 'white', padding: '5px 10px', borderRadius: '4px', fontWeight: 'bold', animation: 'pulse 1s infinite' }}>REC</div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', justifyContent: 'center' }}>
+              <button className="cancel-btn" onClick={stopCamera}>Cancel</button>
+
+              {cameraMode === 'photo' ? (
+                <button className="add-btn" onClick={capturePhoto}>Capture Photo</button>
+              ) : (
+                !isRecording ? (
+                  <button className="add-btn" style={{ background: '#ef4444' }} onClick={startRecording}>Start Recording</button>
+                ) : (
+                  <button className="add-btn" style={{ background: '#333' }} onClick={stopCaptureRecording}>Stop & Save</button>
+                )
+              )}
+            </div>
           </div>
         </div>
       )}

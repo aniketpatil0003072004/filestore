@@ -11,10 +11,11 @@
     "deploy:netlify": "npm run build && netlify deploy --prod --dir=dist"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "@supabase/supabase-js": "^2.39.0",
-    "lucide-react": "^0.294.0"
+    "lucide-react": "^0.294.0",
+    "pdfjs-dist": "^5.4.449",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
