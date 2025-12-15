@@ -63,7 +63,9 @@ function App() {
 
   // PDF & AI State
   const [pdfFile, setPdfFile] = useState(null)
-  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_api_key') || '')
+
+  // GEMINI API KEY - Hardcoded as requested
+  const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"; // Replace with actual key
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [summary, setSummary] = useState('')
 
@@ -75,11 +77,14 @@ function App() {
   const videoPreviewRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const recordedChunksRef = useRef([])
+  const [recordedBlob, setRecordedBlob] = useState(null) // New state for review
 
   const startCamera = async (mode) => {
     try {
       setCameraMode(mode)
       setShowCamera(true)
+      setRecordedBlob(null) // Reset
+      setIsRecording(false)
       setIsModalOpen(false) // Close add item modal
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }, // Prefer back camera on mobile
@@ -92,6 +97,7 @@ function App() {
     }
   }
 
+
   const stopCamera = () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop())
@@ -99,14 +105,18 @@ function App() {
     }
     setShowCamera(false)
     setIsRecording(false)
+    setRecordedBlob(null)
     recordedChunksRef.current = []
   }
 
   useEffect(() => {
-    if (showCamera && videoPreviewRef.current && stream) {
+    if (showCamera && videoPreviewRef.current && stream && !recordedBlob) {
       videoPreviewRef.current.srcObject = stream
+    } else if (videoPreviewRef.current && recordedBlob) {
+      videoPreviewRef.current.srcObject = null;
+      videoPreviewRef.current.src = URL.createObjectURL(recordedBlob);
     }
-  }, [showCamera, stream])
+  }, [showCamera, stream, recordedBlob])
 
   const capturePhoto = async () => {
     if (!videoPreviewRef.current) return
@@ -130,7 +140,9 @@ function App() {
     }
     recorder.onstop = () => {
       const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
-      saveCapturedMedia(blob, 'video')
+      setRecordedBlob(blob) // Review mod
+      setIsRecording(false)
+      // saveCapturedMedia(blob, 'video') // Don't auto save yet
     }
     recorder.start()
     setIsRecording(true)
@@ -143,7 +155,7 @@ function App() {
   }
 
   const saveCapturedMedia = async (blob, type) => {
-    if (blob.size === 0) return
+    if (!blob || blob.size === 0) return
     try {
       setUploading(true)
       const ext = type === 'photo' ? 'jpg' : 'webm'
@@ -198,11 +210,15 @@ function App() {
         .catch((error) => console.log('SW registration failed:', error))
     }
 
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const handleInstall = (e) => {
       e.preventDefault()
       setDeferredPrompt(e)
       setShowInstallButton(true)
-    })
+    }
+
+    window.addEventListener('beforeinstallprompt', handleInstall)
+
+    return () => window.removeEventListener('beforeinstallprompt', handleInstall)
   }, [])
 
   // Handle Share Target
@@ -798,7 +814,7 @@ function App() {
             <div key={item.id} className={`video-card ${item.type === 'note' ? 'note-card' : ''}`} style={item.type === 'secret' ? { border: '1px solid #ef4444' } : {}}>
 
               {/* CONTENT RENDERING */}
-              {item.type === 'video' && (
+              {['video', 'photo', 'pdf'].includes(item.type) && (
                 <div className="video-thumbnail" style={{ position: 'relative' }}>
                   {item.image_url ? <img src={item.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex' }} /> : null}
 
@@ -979,29 +995,18 @@ function App() {
                     onChange={(e) => setPdfFile(e.target.files[0])}
                   />
 
-                  <div style={{ marginTop: '1rem' }}>
-                    <label className="form-label">Gemini API Key (for AI Summary)</label>
-                    <input
-                      type="password"
-                      className="form-input"
-                      placeholder="Paste your Gemini API Key..."
-                      value={geminiKey}
-                      onChange={(e) => {
-                        setGeminiKey(e.target.value);
-                        localStorage.setItem('gemini_api_key', e.target.value);
-                      }}
-                    />
+                  <div style={{ marginTop: '1rem', display: 'none' }}>
                   </div>
 
                   <button
                     type="button"
                     onClick={async () => {
                       if (!pdfFile) return alert("Select a PDF first!");
-                      if (!geminiKey) return alert("Enter Gemini API Key!");
+                      // using global GEMINI_API_KEY constant now
                       setIsSummarizing(true);
                       try {
                         const text = await extractTextFromPdf(pdfFile);
-                        const aiSummary = await summarizeTextWithGemini(text, geminiKey);
+                        const aiSummary = await summarizeTextWithGemini(text, GEMINI_API_KEY);
                         setSummary(aiSummary);
                         setFormData(prev => ({ ...prev, description: aiSummary })); // Auto-fill description
                       } catch (err) {
