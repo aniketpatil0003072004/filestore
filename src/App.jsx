@@ -120,6 +120,10 @@ function App() {
 
   const capturePhoto = async () => {
     if (!videoPreviewRef.current) return
+    if (videoPreviewRef.current.videoWidth === 0) {
+      alert("Camera is starting up, please wait...")
+      return
+    }
     const canvas = document.createElement('canvas')
     canvas.width = videoPreviewRef.current.videoWidth
     canvas.height = videoPreviewRef.current.videoHeight
@@ -895,7 +899,11 @@ function App() {
                   <button className="add-btn" onClick={() => handleEdit(item)} style={{ padding: '4px 12px', fontSize: '0.8rem', marginRight: 'auto', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
                     🏷️ Edit / Append
                   </button>
-                  <button className="icon-btn delete" onClick={() => deleteItem(item.id)}>🗑️</button>
+                  <button className="icon-btn delete" type="button" onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    deleteItem(item.id);
+                  }}>🗑️</button>
                 </div>
               </div>
             </div>
@@ -919,7 +927,7 @@ function App() {
                 <button className={`type-btn ${itemType === 'secret' ? 'active' : ''}`} onClick={() => {
                   if (!isSecretsUnlocked) { setShowPasswordPrompt(true); setIsModalOpen(false); return; }
                   setItemType('secret');
-                }} style={{ color: '#ef4444', borderColor: '#ef4444' }}>🔒 Secret</button>
+                }} style={{ color: '#ef4444', borderColor: '#ef4444', borderStyle: 'solid' }}>🔒 Secret</button>
               </div>
             )}
 
