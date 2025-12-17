@@ -53,10 +53,17 @@ export default function StatsCalendar({ items = [], onClose }) {
             (i.category?.includes('Instagram'))
         ).length;
 
+        // 3. Captured Count (Photos + Videos not from socials)
+        const capturedCount = dayItems.filter(i =>
+            i.type === 'photo' ||
+            (i.type === 'video' && !i.url?.includes('youtube.com') && !i.url?.includes('youtu.be') && !i.url?.includes('instagram.com'))
+        ).length;
+
         return {
             total: dayItems.length,
             youtube: youtubeCount,
             instagram: instaCount,
+            captured: capturedCount,
             items: dayItems
         };
     }, [selectedDate, items]);
@@ -159,7 +166,7 @@ export default function StatsCalendar({ items = [], onClose }) {
                         <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{dailyStats.total} Total</span>
                     </h4>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                         <div style={{
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
                             padding: '1rem', background: '#FF000015', borderRadius: '10px',
@@ -178,6 +185,15 @@ export default function StatsCalendar({ items = [], onClose }) {
                             <span style={{ fontSize: '1.5rem' }}>📸</span>
                             <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '0.25rem' }}>{dailyStats.instagram}</span>
                             <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Instagram</span>
+                        </div>
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            padding: '1rem', background: '#10b98115', borderRadius: '10px',
+                            border: '1px solid #10b98130'
+                        }}>
+                            <span style={{ fontSize: '1.5rem' }}>🤳</span>
+                            <span style={{ fontWeight: 'bold', fontSize: '1.2rem', marginTop: '0.25rem' }}>{dailyStats.captured}</span>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Captured</span>
                         </div>
                     </div>
 

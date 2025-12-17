@@ -144,9 +144,9 @@ function App() {
     }
     recorder.onstop = () => {
       const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
-      setRecordedBlob(blob) // Review mod
+      setRecordedBlob(blob)
       setIsRecording(false)
-      // saveCapturedMedia(blob, 'video') // Don't auto save yet
+      saveCapturedMedia(blob, 'video') // Auto-save on stop
     }
     recorder.start()
     setIsRecording(true)
@@ -828,7 +828,7 @@ function App() {
 
                   {/* DISPLAY PHOTO */}
                   {item.type === 'photo' && (
-                    <img src={item.url} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={item.url} alt="Photo" style={{ width: '100%', maxHeight: '400px', objectFit: 'cover' }} />
                   )}
 
                   {/* DISPLAY PDF */}
