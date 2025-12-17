@@ -146,7 +146,7 @@ function App() {
       const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
       setRecordedBlob(blob)
       setIsRecording(false)
-      saveCapturedMedia(blob, 'video') // Auto-save on stop
+      saveCapturedMedia(blob, 'video')
     }
     recorder.start()
     setIsRecording(true)
@@ -589,7 +589,6 @@ function App() {
           metadata: { user_tag: formData.userTag },
           title: finalTitle,
           image_url: imageUrl,
-          image_url: imageUrl,
           created_at: new Date().toISOString()
         }
 
@@ -813,22 +812,22 @@ function App() {
       )}
 
       {loading ? <div style={{ textAlign: 'center' }}>Loading...</div> : (
-        <div className="video-grid">
+        <div className="video-grid" style={{ alignItems: 'start' }}>
           {filteredItems.map(item => (
             <div key={item.id} className={`video-card ${item.type === 'note' ? 'note-card' : ''}`} style={item.type === 'secret' ? { border: '1px solid #ef4444' } : {}}>
 
               {/* CONTENT RENDERING */}
               {['video', 'photo', 'pdf'].includes(item.type) && (
-                <div className="video-thumbnail" style={{ position: 'relative' }}>
-                  {item.image_url ? <img src={item.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex' }} /> : null}
+                <div className="video-thumbnail" style={{ position: 'relative', aspectRatio: (item.type === 'photo' || (item.type === 'video' && !getThumbnail(item.url) && !item.url.includes('instagram'))) ? 'auto' : '16/9', height: 'auto', minHeight: '200px' }}>
+                  {item.image_url ? <img src={item.image_url} alt="" style={{ width: 'auto', height: 'auto', maxHeight: '450px', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex' }} /> : null}
 
                   {(!item.image_url && item.type === 'video' && getThumbnail(item.url)) && (
                     <img src={getThumbnail(item.url)} alt="" />
                   )}
 
-                  {/* DISPLAY PHOTO */}
-                  {item.type === 'photo' && (
-                    <img src={item.url} alt="Photo" style={{ width: '100%', maxHeight: '400px', objectFit: 'cover' }} />
+                  {/* DISPLAY PHOTO (Only if no image_url, or if it's a captured photo with url) */}
+                  {item.type === 'photo' && !item.image_url && item.url && (
+                    <img src={item.url} alt="Photo" style={{ width: '100%', maxHeight: '450px', objectFit: 'cover' }} />
                   )}
 
                   {/* DISPLAY PDF */}
@@ -840,9 +839,9 @@ function App() {
                   )}
 
                   {/* DISPLAY RECORDED VIDEO (no thumbnail) */}
-                  {item.type === 'video' && !getThumbnail(item.url) && !item.url.includes('instagram') && (
-                    <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <video src={item.url} controls style={{ width: '100%', maxHeight: '100%' }} />
+                  {item.type === 'video' && !item.image_url && !getThumbnail(item.url) && !item.url.includes('instagram') && (
+                    <div style={{ width: '100%', height: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <video src={item.url} controls style={{ width: '100%', maxHeight: '450px' }} />
                     </div>
                   )}
 
@@ -863,7 +862,7 @@ function App() {
                 </div>
               )}
 
-              <div className="video-info">
+              <div className="video-info" style={{ flex: 'none' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.7 }}>
                   📅 {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
@@ -899,11 +898,13 @@ function App() {
                   <button className="add-btn" onClick={() => handleEdit(item)} style={{ padding: '4px 12px', fontSize: '0.8rem', marginRight: 'auto', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
                     🏷️ Edit / Append
                   </button>
-                  <button className="icon-btn delete" type="button" onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    deleteItem(item.id);
-                  }}>🗑️</button>
+                  <button className="icon-btn delete" type="button"
+                    style={{ color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      deleteItem(item.id);
+                    }}>🗑️</button>
                 </div>
               </div>
             </div>
@@ -1052,7 +1053,14 @@ function App() {
       {/* CAMERA MODAL */}
       {showCamera && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ width: '100%', maxWidth: '600px', padding: '1rem', background: '#000' }}>
+          <div className="modal-content" style={{ width: '100%', maxWidth: '600px', padding: '1rem', background: '#000', position: 'relative' }}>
+            {uploading && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                <div className="loading-spinner" style={{ width: '40px', height: '40px', marginBottom: '1rem' }}></div>
+                <h3>Saving Media...</h3>
+                <p>Please wait while we upload and save.</p>
+              </div>
+            )}
             <h3 style={{ color: 'white', margin: '0 0 1rem 0' }}>
               {cameraMode === 'photo' ? '📸 Take Photo' : '📹 Record Video'}
             </h3>
