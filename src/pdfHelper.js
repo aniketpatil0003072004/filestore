@@ -1,7 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Point to the worker file correctly - using CDN for simplicity in Vite apps without complex config
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Point to the worker file correctly - using local import for Vite
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export async function extractTextFromPdf(file) {
     try {
@@ -30,20 +31,32 @@ export async function extractTextFromPdf(file) {
 
 export async function summarizeTextWithGemini(text, apiKey) {
     if (!apiKey) throw new Error("API Key is missing");
+    if (apiKey.includes("PLACE_YOUR_API_KEY")) throw new Error("Please replace the placeholder API Key in your .env file!");
 
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`; // <--- MODEL and KEY USED HERE
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`; // <--- MODEL and KEY USED HERE
 
-    const response = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: `Summarize the following PDF content in a concise, structured way (max 200 words). Highlight key points:\n\n${text.substring(0, 30000)}`
+    let response;
+    try {
+        response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `Summarize the following PDF content in a concise, structured way (max 200 words). Highlight key points:\n\n${text.substring(0, 30000)}`
+                    }]
                 }]
-            }]
-        })
-    });
+            })
+        });
+    } catch (e) {
+        console.error("Fetch failed:", e);
+        throw new Error("Network error! Please check your internet connection.");
+    }
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Gemini API Error (${response.status}): ${errText}`);
+    }
 
     const data = await response.json();
 
