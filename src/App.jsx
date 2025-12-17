@@ -64,8 +64,10 @@ function App() {
   // PDF & AI State
   const [pdfFile, setPdfFile] = useState(null)
 
-  // GEMINI API KEY - Hardcoded as requested
-  const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"; // Replace with actual key
+  // GEMINI API KEY MANAGEMENT
+  // API Key is managed via .env file (VITE_GEMINI_API_KEY)
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [summary, setSummary] = useState('')
 
@@ -832,7 +834,7 @@ function App() {
 
                   {/* DISPLAY PDF */}
                   {item.type === 'pdf' && (
-                    <div style={{ width: '100%', height: '100%', background: '#ff5252', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                    <div style={{ width: '100%', height: '250px', background: '#e11d48', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
                       <span style={{ fontSize: '3rem' }}>📄</span>
                       <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'white', marginTop: '1rem', textDecoration: 'underline', fontWeight: 'bold', pointerEvents: 'auto', zIndex: 10 }}>Download / View PDF</a>
                     </div>
@@ -856,7 +858,7 @@ function App() {
                     <span style={{ fontSize: '1rem', fontWeight: '600', marginTop: '0.5rem', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>View Reel</span>
                   </div>
 
-                  {(!item.image_url && !getThumbnail(item.url) && !item.url?.includes('instagram.com')) && <div style={{ width: '100%', height: '100%', minHeight: '180px', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📝</div>}
+                  {(!item.image_url && !getThumbnail(item.url) && !item.url?.includes('instagram.com') && item.type !== 'pdf' && item.type !== 'photo' && item.type !== 'video') && <div style={{ width: '100%', height: '100%', minHeight: '180px', background: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📝</div>}
 
                   <a href={item.url} target="_blank" className="play-overlay">▶</a>
                 </div>
@@ -1011,13 +1013,18 @@ function App() {
                     type="button"
                     onClick={async () => {
                       if (!pdfFile) return alert("Select a PDF first!");
-                      // using global GEMINI_API_KEY constant now
+
+                      if (!GEMINI_API_KEY) {
+                        alert("Gemini API Key is missing! Please configure VITE_GEMINI_API_KEY in your .env file.");
+                        return;
+                      }
+
                       setIsSummarizing(true);
                       try {
                         const text = await extractTextFromPdf(pdfFile);
                         const aiSummary = await summarizeTextWithGemini(text, GEMINI_API_KEY);
                         setSummary(aiSummary);
-                        setFormData(prev => ({ ...prev, description: aiSummary })); // Auto-fill description
+                        setFormData(prev => ({ ...prev, description: aiSummary }));
                       } catch (err) {
                         alert("Error: " + err.message);
                       } finally {

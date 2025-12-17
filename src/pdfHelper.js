@@ -31,7 +31,7 @@ export async function extractTextFromPdf(file) {
 export async function summarizeTextWithGemini(text, apiKey) {
     if (!apiKey) throw new Error("API Key is missing");
 
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`; // <--- MODEL and KEY USED HERE
 
     const response = await fetch(API_URL, {
         method: "POST",
