@@ -1413,7 +1413,7 @@ function App() {
                         ? "+"
                         : "-"
                       : ""}
-                    ${Math.abs(parseFloat(item.amount) || 0).toFixed(2)}
+                    ₹{Math.abs(parseFloat(item.amount) || 0).toFixed(2)}
                   </div>
                 )}
 
