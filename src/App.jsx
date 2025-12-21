@@ -1949,6 +1949,10 @@ function App() {
           </div>
         </div>
       )}
+
+      <footer className="app-footer">
+        <p>Developed by Aniket Patil</p>
+      </footer>
     </div>
   );
 }

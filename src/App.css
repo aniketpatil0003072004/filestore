@@ -578,3 +578,23 @@
     opacity: 1;
   }
 }
+/* Footer Credit */
+.app-footer {
+  margin-top: 4rem;
+  padding: 2rem 0 1.5rem 0;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.app-footer p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+  letter-spacing: 0.5px;
+}
+
+.app-footer:hover p {
+  opacity: 0.8;
+}
