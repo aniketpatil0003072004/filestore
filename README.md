@@ -1,4 +1,4 @@
-# Video Vault App
+# Vaultify App
 
 I have built your video organizer app with a premium, glassmorphism design.
 

@@ -1,5 +1,5 @@
 /**
- * IndexedDB Helper for Video Vault
+ * IndexedDB Helper for Vaultify
  * Stores user token for Service Worker access
  */
 

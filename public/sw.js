@@ -1,4 +1,4 @@
-// Video Vault Service Worker with Background Save
+// Vaultify Service Worker with Background Save
 // Handles PWA caching, Share Target API, and silent background saves
 
 const CACHE_NAME = 'video-vault-v2'
@@ -107,7 +107,7 @@ async function handleShareTarget(request) {
             const title = metadata?.title || 'Saved Link'
             const channel = metadata?.channelName ? `By: ${metadata.channelName}` : ''
 
-            self.registration.showNotification('Video Vault', {
+            self.registration.showNotification('Vaultify', {
                 body: `${analysis.emoji} Saved to ${categoryName}!\n${title}\n${channel}`,
                 icon: metadata?.thumbnail || '/icon-192.png',
                 badge: '/icon-192.png',
@@ -122,7 +122,7 @@ async function handleShareTarget(request) {
             console.error('Background save error:', error)
 
             // Show error notification
-            self.registration.showNotification('Video Vault', {
+            self.registration.showNotification('Vaultify', {
                 body: '❌ Failed to save. Opening app...',
                 icon: '/icon-192.png',
                 tag: 'video-vault-error'

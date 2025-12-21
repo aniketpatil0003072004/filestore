@@ -1,7 +1,7 @@
 // Add this to your browser console to debug Share Target
 // Go to video.aiproctor.store and paste this in DevTools Console
 
-console.log('🔍 Video Vault - Share Target Debugger\n');
+console.log('🔍 Vaultify - Share Target Debugger\n');
 
 // Check if running as PWA
 const isPWA = window.matchMedia('(display-mode: standalone)').matches;

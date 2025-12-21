@@ -1,4 +1,4 @@
--- Video Vault - Metadata Enhancement Schema
+-- Vaultify - Metadata Enhancement Schema
 -- Add columns for rich metadata storage
 -- Run this in your Supabase SQL Editor
 

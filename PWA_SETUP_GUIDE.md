@@ -58,7 +58,7 @@ You need to deploy your app to a **HTTPS** server (PWA requires HTTPS).
 ### **Test PWA Features:**
 1. Run: `npm run build`
 2. Serve the build: `npx serve -s dist`
-3. Open in Chrome: `http://localhost:3000`
+3. Open in Chrome: `http://localhost:5173`
 4. Open DevTools → Application → Manifest (check if valid)
 5. Open DevTools → Application → Service Workers (check if registered)
 

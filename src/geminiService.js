@@ -1,5 +1,5 @@
 /**
- * Gemini AI Integration for Video Vault
+ * Gemini AI Integration for Vaultify
  * Uses Google's Gemini 1.5 Flash model for intelligent video categorization.
  */
 

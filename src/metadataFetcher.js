@@ -1,5 +1,5 @@
 /**
- * FREE Metadata Fetcher for Video Vault
+ * FREE Metadata Fetcher for Vaultify
  * Uses 100% FREE APIs - No authentication required
  * - YouTube oEmbed API (FREE, no key needed)
  * - Instagram oEmbed API (FREE, no key needed)

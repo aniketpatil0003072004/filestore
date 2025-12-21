@@ -52,7 +52,7 @@ export default function Auth({ onLogin }) {
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <h1 className="title">Video Vault</h1>
+                <h1 className="title">Vaultify</h1>
                 <p className="auth-subtitle">
                     {isSignUp ? 'Create a new Access Token' : 'Enter your Access Token'}
                 </p>

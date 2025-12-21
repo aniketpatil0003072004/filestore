@@ -795,7 +795,7 @@ function App() {
             newItem.metadata = { ...metadata, user_tag: formData.userTag };
             newItem.title = metadata.title || newItem.title;
             newItem.image_url = metadata.thumbnail || imageUrl;
-          } catch (e) {}
+          } catch (e) { }
         }
 
         const { data, error } = await supabase
@@ -882,15 +882,15 @@ function App() {
 
   const filteredItems = activeTag
     ? items.filter(
-        (i) =>
-          i.metadata?.user_tag === activeTag &&
-          (i.type !== "secret" || isSecretsUnlocked)
-      )
+      (i) =>
+        i.metadata?.user_tag === activeTag &&
+        (i.type !== "secret" || isSecretsUnlocked)
+    )
     : activeCategory === "🔒 Security"
-    ? items.filter((i) => i.type === "secret")
-    : activeCategory === "All"
-    ? items.filter((i) => i.type !== "secret")
-    : items.filter((i) => i.category === activeCategory && i.type !== "secret");
+      ? items.filter((i) => i.type === "secret")
+      : activeCategory === "All"
+        ? items.filter((i) => i.type !== "secret")
+        : items.filter((i) => i.category === activeCategory && i.type !== "secret");
 
   if (!sessionToken)
     return <Auth onLogin={(token) => setSessionToken(token)} />;
@@ -898,7 +898,7 @@ function App() {
   return (
     <div className="app-container">
       <header className="header">
-        <h1 className="title">Video Vault</h1>
+        <h1 className="title">Vaultify</h1>
       </header>
 
       <div className="control-bar">
@@ -987,9 +987,8 @@ function App() {
         {categories.map((cat) => (
           <button
             key={cat}
-            className={`category-pill ${
-              activeCategory === cat && !activeTag ? "active" : ""
-            }`}
+            className={`category-pill ${activeCategory === cat && !activeTag ? "active" : ""
+              }`}
             onClick={() => handleCategoryClick(cat)}
             style={
               cat === "🔒 Security"
@@ -1192,9 +1191,8 @@ function App() {
           {filteredItems.map((item) => (
             <div
               key={item.id}
-              className={`video-card ${
-                item.type === "note" ? "note-card" : ""
-              }`}
+              className={`video-card ${item.type === "note" ? "note-card" : ""
+                }`}
               style={
                 item.type === "secret" ? { border: "1px solid #ef4444" } : {}
               }
@@ -1207,9 +1205,9 @@ function App() {
                     position: "relative",
                     aspectRatio:
                       item.type === "photo" ||
-                      (item.type === "video" &&
-                        !getThumbnail(item.url) &&
-                        !item.url.includes("instagram"))
+                        (item.type === "video" &&
+                          !getThumbnail(item.url) &&
+                          !item.url.includes("instagram"))
                         ? "auto"
                         : "16/9",
                     height: "auto",
@@ -1313,8 +1311,8 @@ function App() {
                     style={{
                       display:
                         !item.image_url &&
-                        item.url &&
-                        item.url.includes("instagram.com")
+                          item.url &&
+                          item.url.includes("instagram.com")
                           ? "flex"
                           : "none",
                       width: "100%",
@@ -1542,26 +1540,23 @@ function App() {
                   📸 Photo
                 </button>
                 <button
-                  className={`type-btn ${
-                    itemType === "record" ? "active" : ""
-                  }`}
+                  className={`type-btn ${itemType === "record" ? "active" : ""
+                    }`}
                   onClick={() => startCamera("video")}
                 >
                   📹 Record
                 </button>
                 <button
-                  className={`type-btn ${
-                    itemType === "expense" ? "active" : ""
-                  }`}
+                  className={`type-btn ${itemType === "expense" ? "active" : ""
+                    }`}
                   onClick={() => setItemType("expense")}
                   style={{ color: "#b45309", borderColor: "#f59e0b" }}
                 >
                   💸 Expense
                 </button>
                 <button
-                  className={`type-btn ${
-                    itemType === "secret" ? "active" : ""
-                  }`}
+                  className={`type-btn ${itemType === "secret" ? "active" : ""
+                    }`}
                   onClick={() => {
                     if (!isSecretsUnlocked) {
                       setShowPasswordPrompt(true);
@@ -1821,8 +1816,8 @@ function App() {
                   {uploading
                     ? "Saving..."
                     : editingItem
-                    ? "Update"
-                    : "Save Item"}
+                      ? "Update"
+                      : "Save Item"}
                 </button>
               </div>
             </form>

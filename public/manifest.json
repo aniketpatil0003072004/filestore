@@ -1,6 +1,6 @@
 {
-    "name": "Video Vault",
-    "short_name": "Video Vault",
+    "name": "Vaultify",
+    "short_name": "Vaultify",
     "description": "Save and organize your favorite videos from YouTube and Instagram",
     "start_url": "/?source=pwa",
     "scope": "/",

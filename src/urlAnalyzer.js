@@ -1,5 +1,5 @@
 /**
- * Smart URL Analyzer for Video Vault
+ * Smart URL Analyzer for Vaultify
  * Detects platform, content type, and suggests categories
  */
 
