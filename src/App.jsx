@@ -7,7 +7,6 @@ import {
   getCategoryEmoji,
 } from "./urlAnalyzer";
 import { storeToken, removeToken } from "./indexedDBHelper";
-import SuccessToast from "./components/SuccessToast";
 import StatsCalendar from "./components/StatsCalendar";
 import { enrichMetadata } from "./metadataFetcher";
 import { analyzeContentWithMetadata } from "./categoryHelper";
@@ -52,6 +51,9 @@ function App() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastEmoji, setToastEmoji] = useState("✅");
+
+  // PROMO VIDEO STATE
+  const [showPromo, setShowPromo] = useState(false);
 
   // WALLET STATE (new feature)
   const [walletBalance, setWalletBalance] = useState(0);
@@ -893,10 +895,19 @@ function App() {
         : items.filter((i) => i.category === activeCategory && i.type !== "secret");
 
   if (!sessionToken)
-    return <Auth onLogin={(token) => setSessionToken(token)} />;
+    return (
+      <Auth
+        onLogin={(token) => {
+          setSessionToken(token);
+          setShowPromo(true);
+        }}
+      />
+    );
 
   return (
     <div className="app-container">
+      {/* PROMO VIDEO OVERLAY */}
+
       <header className="header">
         <h1 className="title">Vaultify</h1>
       </header>
@@ -1030,6 +1041,48 @@ function App() {
               {tag}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* PROMO DISPLAY - ONLY IN 'All' CATEGORY */}
+      {activeCategory === "All" && (
+        <div style={{
+          background: "#1e293b",
+          border: "1px solid var(--glass-border)",
+          borderRadius: "16px",
+          padding: "1rem",
+          marginBottom: "2rem",
+          textAlign: "center"
+        }}>
+          <h2 style={{
+            fontSize: "1.5rem",
+            marginBottom: "1rem",
+            background: "linear-gradient(to right, #6366f1, #d946ef)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent"
+          }}>
+            🌟 Welcome
+          </h2>
+          <div style={{
+            width: "100%",
+            maxWidth: "800px",
+            margin: "0 auto",
+            aspectRatio: "16/9",
+            background: "black",
+            borderRadius: "12px",
+            overflow: "hidden",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+          }}>
+            <video
+              src="/promo.mp4"
+              controls
+              autoPlay
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            >
+              Your browser does not support the video tag.
+            </video>
+          </div>
         </div>
       )}
 
