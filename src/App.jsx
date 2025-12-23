@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import Auth from "./Auth";
 import {
@@ -84,8 +84,8 @@ function App() {
   const [toastMessage, setToastMessage] = useState("");
   const [toastEmoji, setToastEmoji] = useState("✅");
 
-  // PROMO VIDEO STATE
-  const [showPromo, setShowPromo] = useState(false);
+  // PROMO / INTRO STATE
+  const [showIntro, setShowIntro] = useState(true);
   const [isPromoMuted, setIsPromoMuted] = useState(true);
 
   const togglePromoAudio = () => {
@@ -114,6 +114,39 @@ function App() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletInput, setWalletInput] = useState("");
+
+  // SELECTION & WHATSAPP SHARING
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const toggleSelection = (id) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const shareViaWhatsApp = () => {
+    const selectedItems = items.filter(i => selectedIds.has(i.id));
+    if (selectedItems.length === 0) return;
+
+    let total = 0;
+    let message = "Papa, sending you some expenses:\n\n";
+
+    selectedItems.forEach(item => {
+      const amt = parseFloat(item.amount) || 0;
+      total += amt;
+      message += `• ${item.title}: ₹${amt}\n`;
+    });
+
+    message += `\n*Total Amount: ₹${total}*`;
+
+    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
 
   // Form State
   const [itemType, setItemType] = useState("video");
@@ -934,6 +967,8 @@ function App() {
     } else {
       setActiveCategory(cat);
       setActiveTag(null);
+      setIsSelectionMode(false);
+      setSelectedIds(new Set());
     }
   };
 
@@ -954,10 +989,118 @@ function App() {
       <Auth
         onLogin={(token) => {
           setSessionToken(token);
-          setShowPromo(true);
+          setShowIntro(true);
         }}
       />
     );
+
+  // INTRO SPLASH SCREEN
+  if (showIntro) {
+    return (
+      <div
+        className="intro-screen"
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          background: "#0f172a",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "2rem"
+        }}
+      >
+        <div style={{
+          width: "100%",
+          maxWidth: "800px",
+          aspectRatio: "16/9",
+          background: "black",
+          borderRadius: "24px",
+          overflow: "hidden",
+          boxShadow: "0 20px 50px rgba(99, 102, 241, 0.4)",
+          position: "relative",
+          marginBottom: "2rem"
+        }}>
+          <div style={{ position: "relative", width: "100%", height: "100%" }}>
+            <img
+              src="/promo.webp"
+              alt="Vaultify Promo"
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+            <button
+              onClick={() => togglePromoAudio()}
+              style={{
+                position: "absolute",
+                bottom: "20px",
+                right: "20px",
+                background: "rgba(0,0,0,0.6)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                color: "white",
+                borderRadius: "50%",
+                width: "50px",
+                height: "50px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.5rem",
+                backdropFilter: "blur(4px)",
+                zIndex: 20
+              }}
+            >
+              {isPromoMuted ? "🔇" : "🔊"}
+            </button>
+          </div>
+        </div>
+
+        <h1 style={{
+          fontSize: "2.5rem",
+          marginBottom: "1rem",
+          background: "linear-gradient(to right, #6366f1, #d946ef)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          textAlign: "center"
+        }}>
+          Welcome to Vaultify
+        </h1>
+
+        <p style={{
+          color: "var(--text-secondary)",
+          maxWidth: "500px",
+          textAlign: "center",
+          marginBottom: "2rem",
+          fontSize: "1.1rem",
+          lineHeight: "1.6"
+        }}>
+          Organize your videos, manage expenses, and secure your secrets in one beautiful place.
+        </p>
+
+        <button
+          onClick={() => {
+            window.speechSynthesis.cancel();
+            setShowIntro(false);
+          }}
+          style={{
+            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+            color: "white",
+            border: "none",
+            padding: "1rem 3rem",
+            fontSize: "1.2rem",
+            fontWeight: "bold",
+            borderRadius: "50px",
+            boxShadow: "0 4px 20px rgba(99, 102, 241, 0.5)",
+            cursor: "pointer",
+            transition: "transform 0.2s"
+          }}
+          onMouseOver={(e) => e.target.style.transform = "scale(1.05)"}
+          onMouseOut={(e) => e.target.style.transform = "scale(1)"}
+        >
+          Continue to App &rarr;
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -992,31 +1135,47 @@ function App() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+
+
+
           {/* PRIMARY ACTION */}
-          <button
-            className="add-btn"
-            onClick={() => {
-              setEditingItem(null);
-              setFormData({
-                url: "",
-                title: "",
-                category: "",
-                description: "",
-                userTag: "",
-                channelName: "",
-                amount: "",
-                isIncome: false,
-              });
-              setIsModalOpen(true);
-            }}
-            style={{
-              padding: "0.6rem 1.2rem",
-              fontSize: "0.95rem",
-              boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)"
-            }}
-          >
-            + Add Item
-          </button>
+          {!isSelectionMode && (
+            <button
+              className="add-btn"
+              onClick={() => {
+                setEditingItem(null);
+                setFormData({
+                  url: "",
+                  title: "",
+                  category: activeCategory === "All" ? "" : activeCategory,
+                  description: "",
+                  userTag: "",
+                  channelName: "",
+                  amount: "",
+                  isIncome: false,
+                });
+
+                if (activeCategory === "🔒 Security") {
+                  if (!isSecretsUnlocked) {
+                    setShowPasswordPrompt(true);
+                    return;
+                  }
+                  setItemType("secret");
+                } else {
+                  setItemType("video");
+                }
+
+                setIsModalOpen(true);
+              }}
+              style={{
+                padding: "0.6rem 1.2rem",
+                fontSize: "0.95rem",
+                boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)"
+              }}
+            >
+              + Add Item
+            </button>
+          )}
 
           {/* THEME TOGGLE */}
           <button
@@ -1159,6 +1318,26 @@ function App() {
         />
       )}
 
+      {/* FEATURE SCROLLING TICKER */}
+      <div className="ticker-wrap">
+        <div className="ticker-content">
+          {[...Array(4)].map((_, i) => ( // Duplicate 4 times for seamless infinite loop
+            <React.Fragment key={i}>
+              <span className="ticker-item">📺 Universal Storage: Save YouTube, Shorts, Reels & Posts</span>
+              <span className="ticker-item">✨</span>
+              <span className="ticker-item">🔒 Zero-Knowledge: Your secrets are End-to-End Encrypted</span>
+              <span className="ticker-item">✨</span>
+              <span className="ticker-item">💰 Smart Wallet: Track Expenses & Savings</span>
+              <span className="ticker-item">✨</span>
+              <span className="ticker-item">📊 Instant Reports: Generate expense slips in seconds</span>
+              <span className="ticker-item">✨</span>
+              <span className="ticker-item">⚡ PWA Ready: Install & Use Offline</span>
+              <span className="ticker-item">✨</span>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
       <div className="categories">
         {categories.map((cat) => (
           <button
@@ -1192,6 +1371,7 @@ function App() {
           >
             🏷️ My Tags:
           </span>
+
           {userTags.map((tag) => (
             <button
               key={tag}
@@ -1209,67 +1389,7 @@ function App() {
         </div>
       )}
 
-      {/* PROMO DISPLAY - ONLY IN 'All' CATEGORY */}
-      {activeCategory === "All" && (
-        <div style={{
-          background: "#1e293b",
-          border: "1px solid var(--glass-border)",
-          borderRadius: "16px",
-          padding: "1rem",
-          marginBottom: "2rem",
-          textAlign: "center"
-        }}>
-          <h2 style={{
-            fontSize: "1.5rem",
-            marginBottom: "1rem",
-            background: "linear-gradient(to right, #6366f1, #d946ef)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent"
-          }}>
-            🌟 Welcome
-          </h2>
-          <div style={{
-            width: "100%",
-            maxWidth: "800px",
-            margin: "0 auto",
-            aspectRatio: "16/9",
-            background: "black",
-            borderRadius: "12px",
-            overflow: "hidden",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
-          }}>
-            <div style={{ position: "relative", width: "100%", height: "100%" }}>
-              <img
-                src="/promo.webp"
-                alt="Vaultify Promo"
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
-              <button
-                onClick={() => togglePromoAudio()}
-                style={{
-                  position: "absolute",
-                  bottom: "20px",
-                  right: "20px",
-                  background: "rgba(0,0,0,0.6)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  color: "white",
-                  borderRadius: "50%",
-                  width: "40px",
-                  height: "40px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "1.2rem",
-                  backdropFilter: "blur(4px)",
-                }}
-              >
-                {isPromoMuted ? "🔇" : "🔊"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {showStats && (
         <StatsCalendar items={items} onClose={() => setShowStats(false)} />
@@ -1434,7 +1554,36 @@ function App() {
               style={
                 item.type === "secret" ? { border: "1px solid #ef4444" } : {}
               }
+
             >
+              {/* SELECTION CHECKBOX OVERLAY */}
+              {isSelectionMode && item.type === 'expense' && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelection(item.id);
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    left: "10px",
+                    zIndex: 20,
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "6px",
+                    background: selectedIds.has(item.id) ? "#10b981" : "rgba(255,255,255,0.2)",
+                    border: "2px solid white",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 2px 5px rgba(0,0,0,0.3)"
+                  }}
+                >
+                  {selectedIds.has(item.id) && <span style={{ color: "white", fontSize: "16px", fontWeight: "bold" }}>✓</span>}
+                </div>
+              )}
+
               {/* CONTENT RENDERING */}
               {["video", "photo", "pdf"].includes(item.type) && (
                 <div
@@ -1738,460 +1887,627 @@ function App() {
             </div>
           ))}
         </div>
+      )
+      }
+
+      {/* EXPENSE REPORT DRAWER */}
+      {isSelectionMode && (
+        <div style={{
+          position: "fixed",
+          top: "100px",
+          right: "20px",
+          width: "300px",
+          maxHeight: "calc(100vh - 120px)",
+          background: "var(--glass-bg)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid var(--glass-border)",
+          borderRadius: "16px",
+          padding: "1.5rem",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+          zIndex: 900,
+          display: "flex",
+          flexDirection: "column",
+          color: "var(--text-primary)",
+          overflowY: "auto"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+            <h3 style={{ margin: 0, fontSize: "1.2rem" }}>📊 Expense Report</h3>
+            <button
+              onClick={() => {
+                setIsSelectionMode(false);
+                setSelectedIds(new Set());
+              }}
+              style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "1.2rem" }}
+              title="Close"
+            >
+              ✖
+            </button>
+          </div>
+
+          {selectedIds.size === 0 ? (
+            <p style={{ color: "var(--text-secondary)", fontStyle: "italic", fontSize: "0.9rem" }}>
+              Select expense items from your list to generate a report.
+            </p>
+          ) : (
+            <>
+              <div style={{
+                flex: 1,
+                overflowY: "auto",
+                marginBottom: "1rem",
+                borderTop: "1px solid var(--border-color)",
+                borderBottom: "2px solid var(--border-color)",
+                padding: "1rem 0",
+                fontFamily: "monospace" // Mono font for alignment look
+              }}>
+                {items
+                  .filter(i => selectedIds.has(i.id))
+                  .map(item => (
+                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "0.5rem" }}>
+                      <div style={{ display: "flex", flex: 1, gap: "8px" }}>
+                        <span style={{ color: "var(--text-secondary)" }}>
+                          {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                        <span style={{ fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "120px" }}>{item.title}</span>
+                      </div>
+                      <span style={{ fontWeight: "bold" }}>
+                        {parseFloat(item.amount) || 0}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", fontSize: "1.1rem" }}>
+                <strong>Total:</strong>
+                <strong>
+                  ₹{items
+                    .filter(i => selectedIds.has(i.id))
+                    .reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0)
+                    .toFixed(2)}
+                </strong>
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem", flexDirection: "column" }}>
+                <button
+                  onClick={() => {
+                    const selected = items.filter(i => selectedIds.has(i.id));
+                    // Formatted Report Text
+                    let msg = "📊 *EXPENSE REPORT*\n";
+                    msg += "--------------------------------\n";
+                    msg += "Date       | Item         | Amount\n";
+                    msg += "--------------------------------\n";
+
+                    selected.forEach(i => {
+                      const d = new Date(i.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                      const t = i.title.length > 12 ? i.title.substring(0, 11) + "." : i.title.padEnd(12, " ");
+                      const a = (parseFloat(i.amount) || 0).toString().padStart(6, " ");
+                      msg += `${d.padEnd(10, " ")} | ${t} | ${a}\n`;
+                    });
+
+                    const total = selected.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+                    msg += "--------------------------------\n";
+                    msg += `TOTAL: ${total.toFixed(2).padStart(23, " ")}\n`;
+                    msg += "--------------------------------\n";
+
+                    navigator.clipboard.writeText(msg).then(() => {
+                      setToastEmoji("📋");
+                      setToastMessage("Report Copied!");
+                      setShowToast(true);
+                    });
+                  }}
+                  style={{
+                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    border: "none",
+                    color: "white",
+                    padding: "0.8rem",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.5rem",
+                    boxShadow: "0 4px 12px rgba(99, 102, 241, 0.4)"
+                  }}
+                >
+                  <span>📋 Copy Report</span>
+                </button>
+
+                <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", textAlign: "center", marginTop: "0.5rem" }}>
+                  Select items &rarr; Copy Report &rarr; Send anywhere
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
+
       {/* ADD/EDIT MODAL */}
-      {isModalOpen && (
-        <div
-          className="modal-overlay"
-          onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}
-        >
-          <div className="modal-content">
-            <h2 style={{ marginTop: 0, marginBottom: "1.5rem" }}>
-              {editingItem ? "Edit Details" : "Add New Item"}
-            </h2>
+      {
+        isModalOpen && (
+          <div
+            className="modal-overlay"
+            onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}
+          >
+            <div className="modal-content">
+              <h2 style={{ marginTop: 0, marginBottom: "1.5rem" }}>
+                {editingItem ? "Edit Details" : "Add New Item"}
+              </h2>
 
-            {!editingItem && (
-              <div className="type-selector">
-                <button
-                  className={`type-btn ${itemType === "video" ? "active" : ""}`}
-                  onClick={() => setItemType("video")}
-                >
-                  Video
-                </button>
-                <button
-                  className={`type-btn ${itemType === "note" ? "active" : ""}`}
-                  onClick={() => setItemType("note")}
-                >
-                  Note
-                </button>
-                <button
-                  className={`type-btn ${itemType === "pdf" ? "active" : ""}`}
-                  onClick={() => setItemType("pdf")}
-                >
-                  📄 PDF
-                </button>
-                <button
-                  className={`type-btn ${itemType === "photo" ? "active" : ""}`}
-                  onClick={() => startCamera("photo")}
-                >
-                  📸 Photo
-                </button>
-                <button
-                  className={`type-btn ${itemType === "record" ? "active" : ""
-                    }`}
-                  onClick={() => startCamera("video")}
-                >
-                  📹 Record
-                </button>
-                <button
-                  className={`type-btn ${itemType === "expense" ? "active" : ""
-                    }`}
-                  onClick={() => setItemType("expense")}
-                  style={{ color: "#b45309", borderColor: "#f59e0b" }}
-                >
-                  💸 Expense
-                </button>
-                <button
-                  className={`type-btn ${itemType === "secret" ? "active" : ""
-                    }`}
-                  onClick={() => {
-                    if (!isSecretsUnlocked) {
-                      setShowPasswordPrompt(true);
-                      setIsModalOpen(false);
-                      return;
-                    }
-                    setItemType("secret");
-                  }}
-                  style={{
-                    color: "#ef4444",
-                    borderColor: "#ef4444",
-                    borderStyle: "solid",
-                  }}
-                >
-                  🔒 Secret
-                </button>
-              </div>
-            )}
-
-            {/* EXPENSE UI */}
-            {itemType === "expense" && (
-              <div className="form-group">
-                <label className="form-label">Amount</label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.amount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, amount: e.target.value })
-                  }
-                />
-                <div
-                  style={{
-                    marginTop: "0.5rem",
-                    display: "flex",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                  }}
-                >
-                  <label
+              {!editingItem && (
+                <div className="type-selector">
+                  <button
+                    className={`type-btn ${itemType === "video" ? "active" : ""}`}
+                    onClick={() => setItemType("video")}
+                  >
+                    Video
+                  </button>
+                  <button
+                    className={`type-btn ${itemType === "note" ? "active" : ""}`}
+                    onClick={() => setItemType("note")}
+                  >
+                    Note
+                  </button>
+                  <button
+                    className={`type-btn ${itemType === "pdf" ? "active" : ""}`}
+                    onClick={() => setItemType("pdf")}
+                  >
+                    📄 PDF
+                  </button>
+                  <button
+                    className={`type-btn ${itemType === "photo" ? "active" : ""}`}
+                    onClick={() => startCamera("photo")}
+                  >
+                    📸 Photo
+                  </button>
+                  <button
+                    className={`type-btn ${itemType === "record" ? "active" : ""
+                      }`}
+                    onClick={() => startCamera("video")}
+                  >
+                    📹 Record
+                  </button>
+                  <button
+                    className={`type-btn ${itemType === "expense" ? "active" : ""
+                      }`}
+                    onClick={() => setItemType("expense")}
+                    style={{ color: "#b45309", borderColor: "#f59e0b" }}
+                  >
+                    💸 Expense
+                  </button>
+                  <button
+                    className={`type-btn ${itemType === "secret" ? "active" : ""
+                      }`}
+                    onClick={() => {
+                      if (!isSecretsUnlocked) {
+                        setShowPasswordPrompt(true);
+                        setIsModalOpen(false);
+                        return;
+                      }
+                      setItemType("secret");
+                    }}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
+                      color: "#ef4444",
+                      borderColor: "#ef4444",
+                      borderStyle: "solid",
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={formData.isIncome}
-                      onChange={(e) =>
-                        setFormData({ ...formData, isIncome: e.target.checked })
-                      }
-                    />
-                    <span style={{ fontSize: "0.9rem" }}>Mark as Income</span>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              {!editingItem && itemType === "video" && (
-                <div className="form-group">
-                  <label className="form-label">Video URL</label>
-                  <input
-                    className="form-input"
-                    type="url"
-                    required
-                    value={formData.url}
-                    onChange={(e) =>
-                      setFormData({ ...formData, url: e.target.value })
-                    }
-                  />
+                    🔒 Secret
+                  </button>
                 </div>
               )}
 
-              {/* Title Field (Optional for notes/secrets) */}
-              <div className="form-group">
-                <label className="form-label">Title</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
-                />
-              </div>
-
-              {/* Tags */}
-              <div className="form-group">
-                <label className="form-label">🏷️ Tag</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="Type or Select Tag..."
-                  value={formData.userTag}
-                  onChange={(e) =>
-                    setFormData({ ...formData, userTag: e.target.value })
-                  }
-                />
-                {userTags.length > 0 && (
+              {/* EXPENSE UI */}
+              {itemType === "expense" && (
+                <div className="form-group">
+                  <label className="form-label">Amount</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.amount}
+                    onChange={(e) =>
+                      setFormData({ ...formData, amount: e.target.value })
+                    }
+                  />
                   <div
                     style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "0.5rem",
                       marginTop: "0.5rem",
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "center",
                     }}
                   >
-                    {userTags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() =>
-                          setFormData({ ...formData, userTag: tag })
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.isIncome}
+                        onChange={(e) =>
+                          setFormData({ ...formData, isIncome: e.target.checked })
                         }
+                      />
+                      <span style={{ fontSize: "0.9rem" }}>Mark as Income</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit}>
+                {!editingItem && itemType === "video" && (
+                  <div className="form-group">
+                    <label className="form-label">Video URL</label>
+                    <input
+                      className="form-input"
+                      type="url"
+                      required
+                      value={formData.url}
+                      onChange={(e) =>
+                        setFormData({ ...formData, url: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* Title Field (Optional for notes/secrets) */}
+                <div className="form-group">
+                  <label className="form-label">Title</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) =>
+                      setFormData({ ...formData, title: e.target.value })
+                    }
+                  />
+                </div>
+
+                {/* Tags */}
+                <div className="form-group">
+                  <label className="form-label">🏷️ Tag</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder="Type or Select Tag..."
+                    value={formData.userTag}
+                    onChange={(e) =>
+                      setFormData({ ...formData, userTag: e.target.value })
+                    }
+                  />
+                  {userTags.length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                        marginTop: "0.5rem",
+                      }}
+                    >
+                      {userTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() =>
+                            setFormData({ ...formData, userTag: tag })
+                          }
+                          style={{
+                            background:
+                              formData.userTag === tag
+                                ? "var(--accent-primary)"
+                                : "rgba(255,255,255,0.05)",
+                            color:
+                              formData.userTag === tag
+                                ? "#fff"
+                                : "var(--text-secondary)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "12px",
+                            padding: "4px 10px",
+                            fontSize: "0.75rem",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    {itemType === "secret"
+                      ? "🔐 Secret Content"
+                      : "📝 Description"}
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows="4"
+                    placeholder={
+                      itemType === "secret"
+                        ? "Content here will be ENCRYPTED using your Master Password."
+                        : "Description..."
+                    }
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                  />
+                </div>
+
+                {/* PDF SPECIFIC UI */}
+                {!editingItem && itemType === "pdf" && (
+                  <div
+                    style={{
+                      marginBottom: "1.5rem",
+                      padding: "1rem",
+                      background: "rgba(255,255,255,0.05)",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <label className="form-label">Upload PDF</label>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="form-input"
+                      onChange={(e) => setPdfFile(e.target.files[0])}
+                    />
+
+                    <div style={{ marginTop: "1rem", display: "none" }}></div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!pdfFile) return alert("Select a PDF first!");
+
+                        if (!GEMINI_API_KEY) {
+                          alert(
+                            "Gemini API Key is missing! Please configure VITE_GEMINI_API_KEY in your .env file."
+                          );
+                          return;
+                        }
+
+                        setIsSummarizing(true);
+                        try {
+                          const text = await extractTextFromPdf(pdfFile);
+                          const aiSummary = await summarizeTextWithGemini(
+                            text,
+                            GEMINI_API_KEY
+                          );
+                          setSummary(aiSummary);
+                          setFormData((prev) => ({
+                            ...prev,
+                            description: aiSummary,
+                          }));
+                        } catch (err) {
+                          alert("Error: " + err.message);
+                        } finally {
+                          setIsSummarizing(false);
+                        }
+                      }}
+                      className="add-btn"
+                      disabled={isSummarizing}
+                      style={{
+                        marginTop: "1rem",
+                        width: "100%",
+                        background: isSummarizing
+                          ? "#666"
+                          : "linear-gradient(135deg, #8b5cf6, #d946ef)",
+                      }}
+                    >
+                      {isSummarizing
+                        ? "Analyzing PDF..."
+                        : "✨ Summarize with AI"}
+                    </button>
+
+                    {summary && (
+                      <div
                         style={{
-                          background:
-                            formData.userTag === tag
-                              ? "var(--accent-primary)"
-                              : "rgba(255,255,255,0.05)",
-                          color:
-                            formData.userTag === tag
-                              ? "#fff"
-                              : "var(--text-secondary)",
-                          border: "1px solid var(--border-color)",
-                          borderRadius: "12px",
-                          padding: "4px 10px",
-                          fontSize: "0.75rem",
-                          cursor: "pointer",
-                          transition: "all 0.2s",
+                          marginTop: "1rem",
+                          padding: "0.5rem",
+                          background: "rgba(0,0,0,0.2)",
+                          borderRadius: "4px",
+                          fontSize: "0.85rem",
                         }}
                       >
-                        {tag}
-                      </button>
-                    ))}
+                        <strong>Preview:</strong> {summary.substring(0, 100)}...
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="cancel-btn"
+                    onClick={() => setIsModalOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="submit-btn"
+                    disabled={uploading}
+                  >
+                    {uploading
+                      ? "Saving..."
+                      : editingItem
+                        ? "Update"
+                        : "Save Item"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      }
+
+      {/* CAMERA MODAL */}
+      {
+        showCamera && (
+          <div className="modal-overlay">
+            <div
+              className="modal-content"
+              style={{
+                width: "100%",
+                maxWidth: "600px",
+                padding: "1rem",
+                background: "#000",
+                position: "relative",
+              }}
+            >
+              {uploading && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(0,0,0,0.8)",
+                    zIndex: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                  }}
+                >
+                  <div
+                    className="loading-spinner"
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      marginBottom: "1rem",
+                    }}
+                  ></div>
+                  <h3>Saving Media...</h3>
+                  <p>Please wait while we upload and save.</p>
+                </div>
+              )}
+              <h3 style={{ color: "white", margin: "0 0 1rem 0" }}>
+                {cameraMode === "photo" ? "📸 Take Photo" : "📹 Record Video"}
+              </h3>
+
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: "0",
+                  paddingBottom: "75%",
+                  background: "#222",
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                }}
+              >
+                <video
+                  ref={videoPreviewRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+                {isRecording && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "10px",
+                      right: "10px",
+                      background: "red",
+                      color: "white",
+                      padding: "5px 10px",
+                      borderRadius: "4px",
+                      fontWeight: "bold",
+                      animation: "pulse 1s infinite",
+                    }}
+                  >
+                    REC
                   </div>
                 )}
               </div>
 
-              <div className="form-group">
-                <label className="form-label">
-                  {itemType === "secret"
-                    ? "🔐 Secret Content"
-                    : "📝 Description"}
-                </label>
-                <textarea
-                  className="form-input"
-                  rows="4"
-                  placeholder={
-                    itemType === "secret"
-                      ? "Content here will be ENCRYPTED using your Master Password."
-                      : "Description..."
-                  }
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                />
-              </div>
-
-              {/* PDF SPECIFIC UI */}
-              {!editingItem && itemType === "pdf" && (
-                <div
-                  style={{
-                    marginBottom: "1.5rem",
-                    padding: "1rem",
-                    background: "rgba(255,255,255,0.05)",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <label className="form-label">Upload PDF</label>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    className="form-input"
-                    onChange={(e) => setPdfFile(e.target.files[0])}
-                  />
-
-                  <div style={{ marginTop: "1rem", display: "none" }}></div>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!pdfFile) return alert("Select a PDF first!");
-
-                      if (!GEMINI_API_KEY) {
-                        alert(
-                          "Gemini API Key is missing! Please configure VITE_GEMINI_API_KEY in your .env file."
-                        );
-                        return;
-                      }
-
-                      setIsSummarizing(true);
-                      try {
-                        const text = await extractTextFromPdf(pdfFile);
-                        const aiSummary = await summarizeTextWithGemini(
-                          text,
-                          GEMINI_API_KEY
-                        );
-                        setSummary(aiSummary);
-                        setFormData((prev) => ({
-                          ...prev,
-                          description: aiSummary,
-                        }));
-                      } catch (err) {
-                        alert("Error: " + err.message);
-                      } finally {
-                        setIsSummarizing(false);
-                      }
-                    }}
-                    className="add-btn"
-                    disabled={isSummarizing}
-                    style={{
-                      marginTop: "1rem",
-                      width: "100%",
-                      background: isSummarizing
-                        ? "#666"
-                        : "linear-gradient(135deg, #8b5cf6, #d946ef)",
-                    }}
-                  >
-                    {isSummarizing
-                      ? "Analyzing PDF..."
-                      : "✨ Summarize with AI"}
-                  </button>
-
-                  {summary && (
-                    <div
-                      style={{
-                        marginTop: "1rem",
-                        padding: "0.5rem",
-                        background: "rgba(0,0,0,0.2)",
-                        borderRadius: "4px",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      <strong>Preview:</strong> {summary.substring(0, 100)}...
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="cancel-btn"
-                  onClick={() => setIsModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="submit-btn"
-                  disabled={uploading}
-                >
-                  {uploading
-                    ? "Saving..."
-                    : editingItem
-                      ? "Update"
-                      : "Save Item"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CAMERA MODAL */}
-      {showCamera && (
-        <div className="modal-overlay">
-          <div
-            className="modal-content"
-            style={{
-              width: "100%",
-              maxWidth: "600px",
-              padding: "1rem",
-              background: "#000",
-              position: "relative",
-            }}
-          >
-            {uploading && (
               <div
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "rgba(0,0,0,0.8)",
-                  zIndex: 10,
                   display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
+                  gap: "1rem",
+                  marginTop: "1rem",
                   justifyContent: "center",
-                  color: "white",
                 }}
               >
-                <div
-                  className="loading-spinner"
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    marginBottom: "1rem",
-                  }}
-                ></div>
-                <h3>Saving Media...</h3>
-                <p>Please wait while we upload and save.</p>
+                <button className="cancel-btn" onClick={stopCamera}>
+                  Cancel
+                </button>
+
+                {cameraMode === "photo" ? (
+                  <button className="add-btn" onClick={capturePhoto}>
+                    Capture Photo
+                  </button>
+                ) : !isRecording ? (
+                  <button
+                    className="add-btn"
+                    style={{ background: "#ef4444" }}
+                    onClick={startRecording}
+                  >
+                    Start Recording
+                  </button>
+                ) : (
+                  <button
+                    className="add-btn"
+                    style={{ background: "#333" }}
+                    onClick={stopCaptureRecording}
+                  >
+                    Stop & Save
+                  </button>
+                )}
               </div>
-            )}
-            <h3 style={{ color: "white", margin: "0 0 1rem 0" }}>
-              {cameraMode === "photo" ? "📸 Take Photo" : "📹 Record Video"}
-            </h3>
-
-            <div
-              style={{
-                position: "relative",
-                width: "100%",
-                height: "0",
-                paddingBottom: "75%",
-                background: "#222",
-                borderRadius: "12px",
-                overflow: "hidden",
-              }}
-            >
-              <video
-                ref={videoPreviewRef}
-                autoPlay
-                playsInline
-                muted
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-              {isRecording && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "10px",
-                    right: "10px",
-                    background: "red",
-                    color: "white",
-                    padding: "5px 10px",
-                    borderRadius: "4px",
-                    fontWeight: "bold",
-                    animation: "pulse 1s infinite",
-                  }}
-                >
-                  REC
-                </div>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "1rem",
-                marginTop: "1rem",
-                justifyContent: "center",
-              }}
-            >
-              <button className="cancel-btn" onClick={stopCamera}>
-                Cancel
-              </button>
-
-              {cameraMode === "photo" ? (
-                <button className="add-btn" onClick={capturePhoto}>
-                  Capture Photo
-                </button>
-              ) : !isRecording ? (
-                <button
-                  className="add-btn"
-                  style={{ background: "#ef4444" }}
-                  onClick={startRecording}
-                >
-                  Start Recording
-                </button>
-              ) : (
-                <button
-                  className="add-btn"
-                  style={{ background: "#333" }}
-                  onClick={stopCaptureRecording}
-                >
-                  Stop & Save
-                </button>
-              )}
             </div>
           </div>
-        </div>
+        )
+      }
+
+      {/* FLOATING EXPENSE SELECT BUTTON (Bottom Right) */}
+      {activeTag === "Expenses" && items.some(i => i.type === 'expense') && (
+        <button
+          onClick={() => {
+            setIsSelectionMode(!isSelectionMode);
+            setSelectedIds(new Set());
+          }}
+          style={{
+            position: "fixed",
+            bottom: "60px",
+            right: "20px",
+            zIndex: 800,
+            background: isSelectionMode ? "#ef4444" : "var(--accent-primary)",
+            color: "white",
+            border: "none",
+            padding: "0.8rem 1.2rem",
+            borderRadius: "50px",
+            boxShadow: "0 4px 15px rgba(0,0,0,0.4)",
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            cursor: "pointer",
+            transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
+          }}
+        >
+          {isSelectionMode ? "✖ Cancel Details" : "🧾 Report"}
+        </button>
       )}
 
       <footer className="app-footer">
         <p>Developed by Aniket Patil</p>
       </footer>
-    </div>
+    </div >
   );
 }
 
