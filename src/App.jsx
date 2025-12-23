@@ -1106,35 +1106,17 @@ function App() {
     <div className="app-container">
       {/* PROMO VIDEO OVERLAY */}
 
-      <header className="header" style={{
-        justifyContent: "space-between",
-        padding: "1rem 2rem",
-        marginBottom: "2rem",
-        background: "var(--glass-bg)",
-        backdropFilter: "blur(12px)",
-        borderBottom: "1px solid var(--glass-border)",
-        borderRadius: "0 0 24px 24px",
-        position: "sticky",
-        top: 0,
-        zIndex: 100
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <h1 className="title" style={{ fontSize: "2rem", margin: 0, textAlign: "left" }}>Vaultify</h1>
-          <div style={{
-            background: "rgba(99, 102, 241, 0.1)",
-            padding: "0.25rem 0.75rem",
-            borderRadius: "20px",
-            fontSize: "0.9rem",
-            fontWeight: 700,
-            border: "1px solid rgba(99, 102, 241, 0.2)"
-          }}>
+      <header className="header">
+        <div className="header-content-left">
+          <h1 className="title">Vaultify</h1>
+          <div className="wallet-pill">
             <span style={{ color: walletBalance < 0 ? "#ef4444" : "#10b981" }}>
               💳 {walletBalance.toFixed(2)}
             </span>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        <div className="header-content-right">
 
 
 
@@ -1167,11 +1149,6 @@ function App() {
 
                 setIsModalOpen(true);
               }}
-              style={{
-                padding: "0.6rem 1.2rem",
-                fontSize: "0.95rem",
-                boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)"
-              }}
             >
               + Add Item
             </button>
@@ -1181,17 +1158,6 @@ function App() {
           <button
             className="icon-btn"
             onClick={toggleTheme}
-            style={{
-              fontSize: "1.2rem",
-              background: "var(--glass-bg)",
-              border: "1px solid var(--glass-border)",
-              width: "40px",
-              height: "40px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "12px"
-            }}
             title="Toggle Theme"
           >
             {theme === "dark" ? "☀️" : "🌙"}
@@ -1202,17 +1168,6 @@ function App() {
             <button
               className="icon-btn"
               onClick={() => setShowMenu(!showMenu)}
-              style={{
-                fontSize: "1.2rem",
-                background: "var(--glass-bg)",
-                border: "1px solid var(--glass-border)",
-                width: "40px",
-                height: "40px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "12px"
-              }}
             >
               ⚙️
             </button>
