@@ -1590,15 +1590,9 @@ function App() {
                   className="video-thumbnail"
                   style={{
                     position: "relative",
-                    aspectRatio:
-                      item.type === "photo" ||
-                        (item.type === "video" &&
-                          !getThumbnail(item.url) &&
-                          !item.url.includes("instagram"))
-                        ? "auto"
-                        : "16/9",
-                    height: "auto",
-                    minHeight: "200px",
+                    aspectRatio: "16/9",
+                    width: "100%",
+                    overflow: "hidden"
                   }}
                 >
                   {item.image_url ? (
@@ -1606,9 +1600,8 @@ function App() {
                       src={item.image_url}
                       alt=""
                       style={{
-                        width: "auto",
-                        height: "auto",
-                        maxHeight: "450px",
+                        width: "100%",
+                        height: "100%",
                         objectFit: "cover",
                       }}
                       onError={(e) => {
@@ -1632,7 +1625,7 @@ function App() {
                       alt="Photo"
                       style={{
                         width: "100%",
-                        maxHeight: "450px",
+                        height: "100%",
                         objectFit: "cover",
                       }}
                     />
@@ -1643,7 +1636,7 @@ function App() {
                     <div
                       style={{
                         width: "100%",
-                        height: "250px",
+                        height: "100%",
                         background: "#e11d48",
                         display: "flex",
                         flexDirection: "column",
