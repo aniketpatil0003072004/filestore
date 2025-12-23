@@ -12,6 +12,17 @@
   --font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+.light-mode {
+  --bg-color: #ede9fe;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --card-bg: rgba(255, 255, 255, 0.6);
+  --accent-primary: #4f46e5;
+  --accent-secondary: #db2777;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -26,6 +37,7 @@ body {
   background-attachment: fixed;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 * {

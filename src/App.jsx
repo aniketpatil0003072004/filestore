@@ -15,6 +15,38 @@ import { extractTextFromPdf, summarizeTextWithGemini } from "./pdfHelper";
 import "./App.css";
 
 function App() {
+  // THEME STATE
+  const [theme, setTheme] = useState(() => localStorage.getItem("vaultify_theme") || "dark");
+  const [showMenu, setShowMenu] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("vaultify_theme", theme);
+    if (theme === "light") {
+      document.body.classList.add("light-mode");
+    } else {
+      document.body.classList.remove("light-mode");
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "dark" ? "light" : "dark");
+  };
+
+  const menuItemStyle = {
+    display: "block",
+    width: "100%",
+    padding: "0.75rem 1rem",
+    textAlign: "left",
+    background: "transparent",
+    border: "none",
+    color: "var(--text-primary)",
+    borderRadius: "8px",
+    fontSize: "0.9rem",
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "background 0.2s"
+  };
+
   const [sessionToken, setSessionToken] = useState(() =>
     localStorage.getItem("video_vault_token")
   );
@@ -931,91 +963,201 @@ function App() {
     <div className="app-container">
       {/* PROMO VIDEO OVERLAY */}
 
-      <header className="header">
-        <h1 className="title">Vaultify</h1>
-      </header>
-
-      <div className="control-bar">
-        <button
-          className="add-btn"
-          onClick={handleInstallClick}
-          style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
-        >
-          📱 Install App
-        </button>
-        {/* CHANGE PASSWORD BUTTON: Only visible when Security is unlocked */}
-        {isSecretsUnlocked && activeCategory === "🔒 Security" && (
-          <button
-            className="add-btn"
-            onClick={() => setShowChangePasswordModal(true)}
-            style={{ background: "#ef4444", borderColor: "#dc2626" }}
-          >
-            🔑 Change Pass
-          </button>
-        )}
-        {/* WALLET DISPLAY */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            marginRight: "0.5rem",
-          }}
-        >
-          <div style={{ fontWeight: 700 }}>
-            Wallet:{" "}
+      <header className="header" style={{
+        justifyContent: "space-between",
+        padding: "1rem 2rem",
+        marginBottom: "2rem",
+        background: "var(--glass-bg)",
+        backdropFilter: "blur(12px)",
+        borderBottom: "1px solid var(--glass-border)",
+        borderRadius: "0 0 24px 24px",
+        position: "sticky",
+        top: 0,
+        zIndex: 100
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <h1 className="title" style={{ fontSize: "2rem", margin: 0, textAlign: "left" }}>Vaultify</h1>
+          <div style={{
+            background: "rgba(99, 102, 241, 0.1)",
+            padding: "0.25rem 0.75rem",
+            borderRadius: "20px",
+            fontSize: "0.9rem",
+            fontWeight: 700,
+            border: "1px solid rgba(99, 102, 241, 0.2)"
+          }}>
             <span style={{ color: walletBalance < 0 ? "#ef4444" : "#10b981" }}>
-              {walletBalance.toFixed(2)}
+              💳 {walletBalance.toFixed(2)}
             </span>
           </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          {/* PRIMARY ACTION */}
           <button
             className="add-btn"
             onClick={() => {
-              setWalletInput(String(walletBalance));
-              setShowWalletModal(true);
+              setEditingItem(null);
+              setFormData({
+                url: "",
+                title: "",
+                category: "",
+                description: "",
+                userTag: "",
+                channelName: "",
+                amount: "",
+                isIncome: false,
+              });
+              setIsModalOpen(true);
             }}
-            style={{ minWidth: "120px" }}
+            style={{
+              padding: "0.6rem 1.2rem",
+              fontSize: "0.95rem",
+              boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)"
+            }}
           >
-            Set Wallet
+            + Add Item
           </button>
+
+          {/* THEME TOGGLE */}
+          <button
+            className="icon-btn"
+            onClick={toggleTheme}
+            style={{
+              fontSize: "1.2rem",
+              background: "var(--glass-bg)",
+              border: "1px solid var(--glass-border)",
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "12px"
+            }}
+            title="Toggle Theme"
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+
+          {/* MENU TOGGLE */}
+          <div style={{ position: "relative" }}>
+            <button
+              className="icon-btn"
+              onClick={() => setShowMenu(!showMenu)}
+              style={{
+                fontSize: "1.2rem",
+                background: "var(--glass-bg)",
+                border: "1px solid var(--glass-border)",
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "12px"
+              }}
+            >
+              ⚙️
+            </button>
+
+            {/* DROPDOWN MENU */}
+            {showMenu && (
+              <div style={{
+                position: "absolute",
+                top: "120%",
+                right: 0,
+                width: "220px",
+                background: "var(--bg-color)", // solid bg for clearer readability or glass
+                backgroundColor: theme === 'dark' ? '#1e293b' : '#ffffff',
+                border: "1px solid var(--glass-border)",
+                borderRadius: "16px",
+                padding: "0.5rem",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+                zIndex: 200,
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem"
+              }}>
+                {showInstallButton && deferredPrompt && (
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      handleInstallClick();
+                      setShowMenu(false);
+                    }}
+                    style={menuItemStyle}
+                  >
+                    📱 Install App
+                  </button>
+                )}
+
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    setWalletInput(String(walletBalance));
+                    setShowWalletModal(true);
+                    setShowMenu(false);
+                  }}
+                  style={menuItemStyle}
+                >
+                  💰 Set Wallet
+                </button>
+
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    toggleAutoSave();
+                    // Don't close menu immediately users might want to verify toggle
+                  }}
+                  style={menuItemStyle}
+                >
+                  {autoSaveMode ? "⚡ Auto-Save: ON" : "📝 Auto-Save: OFF"}
+                </button>
+
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    setShowStats(true);
+                    setShowMenu(false);
+                  }}
+                  style={menuItemStyle}
+                >
+                  📅 View Calendar
+                </button>
+
+                {isSecretsUnlocked && activeCategory === "🔒 Security" && (
+                  <button
+                    className="menu-item"
+                    onClick={() => {
+                      setShowChangePasswordModal(true);
+                      setShowMenu(false);
+                    }}
+                    style={{ ...menuItemStyle, color: "#ef4444" }}
+                  >
+                    🔑 Change Password
+                  </button>
+                )}
+
+                <div style={{ height: "1px", background: "var(--glass-border)", margin: "0.25rem 0" }}></div>
+
+                <button
+                  className="menu-item"
+                  onClick={handleSignOut}
+                  style={{ ...menuItemStyle, color: "#ef4444" }}
+                >
+                  🚪 Sign Out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-        <button
-          className="add-btn"
-          onClick={toggleAutoSave}
-          style={{
-            background: autoSaveMode ? "#f59e0b" : "#6366f1",
-            minWidth: "140px",
-          }}
-        >
-          {autoSaveMode ? "⚡ Auto-Save" : "📝 Manual"}
-        </button>
-        <button
-          className="add-btn"
-          onClick={() => {
-            setEditingItem(null);
-            setFormData({
-              url: "",
-              title: "",
-              category: "",
-              description: "",
-              userTag: "",
-              channelName: "",
-              amount: "",
-              isIncome: false,
-            });
-            setIsModalOpen(true);
-          }}
-        >
-          {" "}
-          + Add Item{" "}
-        </button>
-        <button className="icon-btn" onClick={() => setShowStats(true)}>
-          📅
-        </button>
-        <button className="signout-btn" onClick={handleSignOut}>
-          Sign Out
-        </button>
-      </div>
+      </header>
+
+      {/* OVERLAY TO CLOSE MENU */}
+      {showMenu && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 99 }}
+          onClick={() => setShowMenu(false)}
+        />
+      )}
 
       <div className="categories">
         {categories.map((cat) => (
@@ -2054,3 +2196,4 @@ function App() {
 }
 
 export default App;
+
