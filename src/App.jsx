@@ -54,6 +54,29 @@ function App() {
 
   // PROMO VIDEO STATE
   const [showPromo, setShowPromo] = useState(false);
+  const [isPromoMuted, setIsPromoMuted] = useState(true);
+
+  const togglePromoAudio = () => {
+    const newMuted = !isPromoMuted;
+    setIsPromoMuted(newMuted);
+
+    if (newMuted) {
+      window.speechSynthesis.cancel();
+    } else {
+      // Start Narrator
+      const utterance = new SpeechSynthesisUtterance(
+        "Welcome to Vaultify. The ultimate place to organize your digital life. " +
+        "Stop losing your favorite content. Save YouTube videos, Shorts, and Instagram Reels instantly. " +
+        "Capture moments on the go. Take photos and record videos directly inside the app. " +
+        "Privacy is our priority. With End-to-End Encryption, only YOU have the key to your secrets. " +
+        "Boost productivity with AI Summaries for your PDFs, and track everything on your personal Calendar. " +
+        "Secure. Smart. Organized. Get started with Vaultify today."
+      );
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
 
   // WALLET STATE (new feature)
   const [walletBalance, setWalletBalance] = useState(0);
@@ -1073,15 +1096,35 @@ function App() {
             overflow: "hidden",
             boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
           }}>
-            <video
-              src="/promo.mp4"
-              controls
-              autoPlay
-              muted
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            >
-              Your browser does not support the video tag.
-            </video>
+            <div style={{ position: "relative", width: "100%", height: "100%" }}>
+              <img
+                src="/promo.webp"
+                alt="Vaultify Promo"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+              <button
+                onClick={() => togglePromoAudio()}
+                style={{
+                  position: "absolute",
+                  bottom: "20px",
+                  right: "20px",
+                  background: "rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  color: "white",
+                  borderRadius: "50%",
+                  width: "40px",
+                  height: "40px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.2rem",
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                {isPromoMuted ? "🔇" : "🔊"}
+              </button>
+            </div>
           </div>
         </div>
       )}

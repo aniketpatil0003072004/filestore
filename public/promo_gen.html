@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vaultify Promo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            color: white;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            text-align: center;
+        }
+
+        .active {
+            opacity: 1;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 5rem;
+            margin: 0;
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 30px rgba(168, 85, 247, 0.5));
+            animation: pulse 3s infinite;
+        }
+
+        h2 {
+            font-size: 3rem;
+            margin-top: 1rem;
+            color: #e2e8f0;
+        }
+
+        p {
+            font-size: 1.5rem;
+            color: #94a3b8;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        .icon-container {
+            font-size: 8rem;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 2rem;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .feature-text {
+            animation: slideUp 1s ease-out forwards;
+            opacity: 0;
+            animation-delay: 0.5s;
+        }
+
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 8px;
+            background: linear-gradient(90deg, #6366f1, #ec4899);
+            width: 0%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Slide 1: Intro -->
+    <div class="slide active" id="slide1">
+        <h1>Vaultify</h1>
+        <p class="feature-text">The Ultimate Digital Organizer</p>
+    </div>
+
+    <!-- Slide 2: Media -->
+    <div class="slide" id="slide2">
+        <div class="icon-container">
+            <span>📺</span>
+            <span>📱</span>
+            <span>📸</span>
+        </div>
+        <h2>Store Everything</h2>
+        <p class="feature-text">YouTube Videos, Shorts, Instagram Reels & Posts.<br>All in one place.</p>
+    </div>
+
+    <!-- Slide 3: Camera & Recording -->
+    <div class="slide" id="slide_camera">
+        <div class="icon-container">
+            <span>📸</span>
+            <span>📹</span>
+        </div>
+        <h2>Capture Moments</h2>
+        <p class="feature-text">Take Photos & Record Videos<br>Directly inside the app.</p>
+    </div>
+
+    <!-- Slide 4: Security (Shifted) -->
+    <div class="slide" id="slide3">
+        <div class="icon-container">
+            <span>🔒</span>
+            <span>🔑</span>
+        </div>
+        <h2 style="color: #ef4444;">Top-Tier Security</h2>
+        <p class="feature-text">End-to-End Encryption.<br>Only <b>YOU</b> hold the key.</p>
+    </div>
+
+    <!-- Slide 4: Productivity -->
+    <div class="slide" id="slide4">
+        <div class="icon-container">
+            <span>📄</span>
+            <span>🤖</span>
+        </div>
+        <h2>Smart Productivity</h2>
+        <p class="feature-text">Store Notes & PDFs.<br>Get instant AI Summaries.</p>
+    </div>
+
+    <!-- Slide 5: Calendar -->
+    <div class="slide" id="slide5">
+        <div class="icon-container">
+            <span>📅</span>
+        </div>
+        <h2>Track Your History</h2>
+        <p class="feature-text">Visual Calendar View.<br>See exactly what you saved, when you saved it.</p>
+    </div>
+
+    <!-- Slide 6: Outro -->
+    <div class="slide" id="slide6">
+        <h1>Vaultify</h1>
+        <h2>Get Started Today</h2>
+    </div>
+
+    <div class="progress-bar" id="progress"></div>
+
+    <script>
+        const slides = document.querySelectorAll('.slide');
+        const progress = document.getElementById('progress');
+        let currentSlide = 0;
+        const slideDuration = 6000; // 6 seconds per slide
+        const totalDuration = slideDuration * slides.length;
+        let startTime = null;
+
+        function nextSlide() {
+            slides[currentSlide].classList.remove('active');
+            currentSlide = (currentSlide + 1) % slides.length;
+            slides[currentSlide].classList.add('active');
+        }
+
+        function animate(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+
+            // Update Progress Bar
+            const progressPercent = Math.min((elapsed / totalDuration) * 100, 100);
+            progress.style.width = progressPercent + '%';
+
+            // Check for slide transition
+            const shouldBeSlide = Math.floor(elapsed / slideDuration);
+
+            if (shouldBeSlide > currentSlide && shouldBeSlide < slides.length) {
+                nextSlide();
+            }
+
+            if (elapsed < totalDuration) {
+                requestAnimationFrame(animate);
+            }
+        }
+
+        // Start animation after a short delay to allow recorder to settle
+        setTimeout(() => {
+            requestAnimationFrame(animate);
+        }, 1000);
+    </script>
+</body>
+
+</html>
