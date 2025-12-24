@@ -945,7 +945,16 @@ function App() {
     }
   };
 
-  const handleSignOut = () => setSessionToken(null);
+  const handleSignOut = async () => {
+    try {
+      if (sessionToken) {
+        await supabase.rpc('logout_active_session', { p_token: sessionToken });
+      }
+    } catch (e) {
+      console.error("Logout error", e);
+    }
+    setSessionToken(null);
+  };
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
