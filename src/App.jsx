@@ -2432,7 +2432,7 @@ function App() {
       }
 
       {/* FLOATING EXPENSE SELECT BUTTON (Bottom Right) */}
-      {activeTag === "Expenses" && items.some(i => i.type === 'expense') && (
+      {activeTag && filteredItems.some(i => i.type === 'expense') && (
         <button
           onClick={() => {
             setIsSelectionMode(!isSelectionMode);
