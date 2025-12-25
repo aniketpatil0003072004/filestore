@@ -1,4 +1,4 @@
-# 📱 Video Vault PWA - Setup Guide
+# 📱 Vaultify PWA - Setup Guide
 
 ## ✅ What's Been Implemented
 
