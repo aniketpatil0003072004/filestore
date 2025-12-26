@@ -119,6 +119,11 @@ function App() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
+  // PAYMENT HISTORY STATE
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   const toggleSelection = (id) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) {
@@ -457,6 +462,26 @@ function App() {
       console.error("Error fetching items:", error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPaymentHistory = async () => {
+    if (!sessionToken) return;
+    try {
+      setLoadingHistory(true);
+      const { data, error } = await supabase
+        .from("payment_history")
+        .select("*")
+        .eq("user_token", sessionToken)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setPaymentHistory(data || []);
+    } catch (error) {
+      console.error("Error fetching payment history:", error.message);
+      setPaymentHistory([]);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -985,7 +1010,9 @@ function App() {
     ? items.filter(
       (i) =>
         i.metadata?.user_tag === activeTag &&
-        (i.type !== "secret" || isSecretsUnlocked)
+        (i.type !== "secret" || isSecretsUnlocked) &&
+        // Show only pending expenses (not billed yet)
+        (i.type !== "expense" || !i.expense_status || i.expense_status === "pending")
     )
     : activeCategory === "🔒 Security"
       ? items.filter((i) => i.type === "secret")
@@ -1925,7 +1952,7 @@ function App() {
 
               <div style={{ display: "flex", gap: "0.5rem", flexDirection: "column" }}>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const selected = items.filter(i => selectedIds.has(i.id));
                     // Formatted Report Text
                     let msg = "📊 *EXPENSE REPORT*\n";
@@ -1945,11 +1972,62 @@ function App() {
                     msg += `TOTAL: ${total.toFixed(2).padStart(23, " ")}\n`;
                     msg += "--------------------------------\n";
 
-                    navigator.clipboard.writeText(msg).then(() => {
+                    // Copy to clipboard first
+                    try {
+                      await navigator.clipboard.writeText(msg);
+
+                      // Save to payment history
+                      const billId = `BILL_${Date.now()}`;
+                      const billData = {
+                        user_token: sessionToken,
+                        bill_id: billId,
+                        total_amount: total,
+                        item_count: selected.length,
+                        items: selected.map(i => ({
+                          id: i.id,
+                          title: i.title,
+                          amount: i.amount,
+                          created_at: i.created_at
+                        })),
+                        created_at: new Date().toISOString()
+                      };
+
+                      const { error: historyError } = await supabase
+                        .from("payment_history")
+                        .insert([billData]);
+
+                      if (historyError) throw historyError;
+
+                      // Mark all selected expenses as "billed"
+                      const updatePromises = selected.map(item =>
+                        supabase
+                          .from("items")
+                          .update({
+                            expense_status: "billed",
+                            billed_at: new Date().toISOString()
+                          })
+                          .eq("id", item.id)
+                      );
+
+                      await Promise.all(updatePromises);
+
+                      // Refresh items to remove billed ones from view
+                      await fetchItems();
+
                       setToastEmoji("📋");
-                      setToastMessage("Report Copied!");
+                      setToastMessage("Bill saved & copied!");
                       setShowToast(true);
-                    });
+
+                      // Close selection mode
+                      setIsSelectionMode(false);
+                      setSelectedIds(new Set());
+
+                    } catch (error) {
+                      console.error("Error saving bill:", error);
+                      setToastEmoji("❌");
+                      setToastMessage("Error saving bill");
+                      setShowToast(true);
+                    }
                   }}
                   style={{
                     background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
@@ -2433,32 +2511,273 @@ function App() {
 
       {/* FLOATING EXPENSE SELECT BUTTON (Bottom Right) */}
       {activeTag && filteredItems.some(i => i.type === 'expense') && (
-        <button
-          onClick={() => {
-            setIsSelectionMode(!isSelectionMode);
-            setSelectedIds(new Set());
-          }}
-          style={{
-            position: "fixed",
-            bottom: "60px",
-            right: "20px",
-            zIndex: 800,
-            background: isSelectionMode ? "#ef4444" : "var(--accent-primary)",
-            color: "white",
-            border: "none",
-            padding: "0.8rem 1.2rem",
-            borderRadius: "50px",
-            boxShadow: "0 4px 15px rgba(0,0,0,0.4)",
-            fontWeight: "bold",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            cursor: "pointer",
-            transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
-          }}
-        >
-          {isSelectionMode ? "✖ Cancel Details" : "🧾 Report"}
-        </button>
+        <>
+          <button
+            onClick={() => {
+              setIsSelectionMode(!isSelectionMode);
+              setSelectedIds(new Set());
+            }}
+            style={{
+              position: "fixed",
+              bottom: "120px",
+              right: "20px",
+              zIndex: 800,
+              background: isSelectionMode ? "#ef4444" : "var(--accent-primary)",
+              color: "white",
+              border: "none",
+              padding: "0.8rem 1.2rem",
+              borderRadius: "50px",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.4)",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
+              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
+            }}
+          >
+            {isSelectionMode ? "✖ Cancel Details" : "🧾 Report"}
+          </button>
+
+          <button
+            onClick={() => {
+              fetchPaymentHistory();
+              setShowPaymentHistory(true);
+            }}
+            style={{
+              position: "fixed",
+              bottom: "60px",
+              right: "20px",
+              zIndex: 800,
+              background: "linear-gradient(135deg, #10b981, #059669)",
+              color: "white",
+              border: "none",
+              padding: "0.8rem 1.2rem",
+              borderRadius: "50px",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.4)",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
+              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
+            }}
+          >
+            📋 Payment History
+          </button>
+        </>
+      )}
+
+      {/* PAYMENT HISTORY MODAL */}
+      {showPaymentHistory && (
+        <div className="modal-overlay" onClick={() => setShowPaymentHistory(false)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "600px",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column"
+            }}
+          >
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1.5rem",
+              borderBottom: "2px solid var(--border-color)",
+              paddingBottom: "1rem"
+            }}>
+              <h2 style={{ margin: 0 }}>📋 Payment History</h2>
+              <button
+                onClick={() => setShowPaymentHistory(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  color: "var(--text-secondary)"
+                }}
+              >
+                ✖
+              </button>
+            </div>
+
+            <div style={{
+              flex: 1,
+              overflowY: "auto",
+              paddingRight: "0.5rem"
+            }}>
+              {loadingHistory ? (
+                <p style={{ textAlign: "center", color: "var(--text-secondary)" }}>
+                  Loading history...
+                </p>
+              ) : paymentHistory.length === 0 ? (
+                <div style={{
+                  textAlign: "center",
+                  padding: "3rem 1rem",
+                  color: "var(--text-secondary)"
+                }}>
+                  <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📭</div>
+                  <p>No payment history yet</p>
+                  <p style={{ fontSize: "0.9rem", marginTop: "0.5rem" }}>
+                    Generate your first expense report to see it here!
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  {paymentHistory.map((bill) => (
+                    <div
+                      key={bill.id}
+                      style={{
+                        background: "var(--glass-bg)",
+                        border: "1px solid var(--glass-border)",
+                        borderRadius: "12px",
+                        padding: "1rem",
+                        backdropFilter: "blur(10px)"
+                      }}
+                    >
+                      <div style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "start",
+                        marginBottom: "0.75rem"
+                      }}>
+                        <div>
+                          <div style={{
+                            fontSize: "0.85rem",
+                            color: "var(--text-secondary)",
+                            marginBottom: "0.25rem"
+                          }}>
+                            {new Date(bill.created_at).toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                          <div style={{
+                            fontSize: "0.75rem",
+                            color: "var(--text-secondary)",
+                            fontFamily: "monospace"
+                          }}>
+                            {bill.bill_id}
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (confirm("Delete this bill from history?")) {
+                              try {
+                                const { error } = await supabase
+                                  .from("payment_history")
+                                  .delete()
+                                  .eq("id", bill.id);
+
+                                if (error) throw error;
+
+                                setPaymentHistory(prev =>
+                                  prev.filter(b => b.id !== bill.id)
+                                );
+
+                                setToastEmoji("🗑️");
+                                setToastMessage("Bill deleted");
+                                setShowToast(true);
+                              } catch (error) {
+                                console.error("Error deleting bill:", error);
+                                alert("Failed to delete bill");
+                              }
+                            }
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            fontSize: "1.2rem",
+                            padding: "0.25rem"
+                          }}
+                          title="Delete Bill"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+
+                      <div style={{
+                        background: "rgba(0,0,0,0.2)",
+                        borderRadius: "8px",
+                        padding: "0.75rem",
+                        marginBottom: "0.75rem",
+                        maxHeight: "150px",
+                        overflowY: "auto"
+                      }}>
+                        {bill.items && bill.items.map((item, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: "0.85rem",
+                              marginBottom: "0.5rem",
+                              paddingBottom: "0.5rem",
+                              borderBottom: idx < bill.items.length - 1
+                                ? "1px solid var(--border-color)"
+                                : "none"
+                            }}
+                          >
+                            <span style={{
+                              flex: 1,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              marginRight: "1rem"
+                            }}>
+                              {item.title}
+                            </span>
+                            <span style={{ fontWeight: "600" }}>
+                              ₹{parseFloat(item.amount).toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingTop: "0.75rem",
+                        borderTop: "2px solid var(--accent-primary)"
+                      }}>
+                        <div>
+                          <span style={{
+                            fontSize: "1.1rem",
+                            fontWeight: "bold"
+                          }}>
+                            Total Amount
+                          </span>
+                          <div style={{
+                            fontSize: "0.8rem",
+                            color: "var(--text-secondary)"
+                          }}>
+                            {bill.item_count} item{bill.item_count !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                        <span style={{
+                          fontSize: "1.3rem",
+                          fontWeight: "bold",
+                          color: "#10b981"
+                        }}>
+                          ₹{parseFloat(bill.total_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <footer className="app-footer">
