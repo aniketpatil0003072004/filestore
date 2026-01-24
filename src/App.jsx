@@ -1611,341 +1611,709 @@ function App() {
       {loading ? (
         <div style={{ textAlign: "center" }}>Loading...</div>
       ) : (
-        <div className="video-grid" style={{ alignItems: "start" }}>
-          {filteredItems.map((item) => (
-            <div
-              key={item.id}
-              className={`video-card ${item.type === "note" ? "note-card" : ""
-                }`}
-              style={
-                item.type === "secret" ? { border: "1px solid #ef4444" } : {}
-              }
+        <>
+          {/* Check if we have expense items to show table view */}
+          {filteredItems.some(i => i.type === 'expense') ? (
+            /* EXCEL-LIKE TABLE VIEW FOR EXPENSES */
+            <div className="expense-table-wrapper" style={{ padding: '1rem', width: '100%' }}>
+              {/* Stats Cards */}
+              {(() => {
+                const expenseItems = filteredItems.filter(i => i.type === 'expense');
+                const stats = calculateExpenseStats(expenseItems);
+                return (
+                  <div className="expense-stats" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '1rem',
+                    marginBottom: '2rem'
+                  }}>
+                    <div className="stat-card" style={{
+                      background: 'var(--glass-bg)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: '16px',
+                      padding: '1.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem'
+                    }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        📉 Total Expenses
+                      </span>
+                      <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#ef4444' }}>
+                        -₹{stats.totalExpenses.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="stat-card" style={{
+                      background: 'var(--glass-bg)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: '16px',
+                      padding: '1.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem'
+                    }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        📈 Total Income
+                      </span>
+                      <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#10b981' }}>
+                        +₹{stats.totalIncome.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="stat-card" style={{
+                      background: 'var(--glass-bg)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: '16px',
+                      padding: '1.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem'
+                    }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        💰 Net Balance
+                      </span>
+                      <span style={{
+                        fontSize: '1.5rem',
+                        fontWeight: 700,
+                        color: stats.netBalance >= 0 ? '#10b981' : '#ef4444'
+                      }}>
+                        ₹{stats.netBalance.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="stat-card" style={{
+                      background: 'var(--glass-bg)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: '16px',
+                      padding: '1.5rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem'
+                    }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        ⏳ Pending Items
+                      </span>
+                      <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {stats.pendingCount}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
-            >
-              {/* SELECTION CHECKBOX OVERLAY */}
-              {isSelectionMode && item.type === 'expense' && (
+              {/* Table */}
+              <div style={{
+                overflowX: 'auto',
+                background: 'var(--glass-bg)',
+                backdropFilter: 'blur(20px)',
+                borderRadius: '16px',
+                border: '1px solid var(--glass-border)',
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+              }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'separate',
+                  borderSpacing: 0
+                }}>
+                  <thead style={{
+                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                    color: 'white',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10
+                  }}>
+                    <tr>
+                      {isSelectionMode && <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 600, fontSize: '0.9rem', borderBottom: '2px solid rgba(255, 255, 255, 0.2)', whiteSpace: 'nowrap', width: '50px' }}>☑️</th>}
+                      <th onClick={() => handleSort('created_at')} style={{ padding: '1rem', textAlign: 'left', fontWeight: 600, fontSize: '0.9rem', borderBottom: '2px solid rgba(255, 255, 255, 0.2)', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                        📅 Date {sortConfig.key === 'created_at' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th onClick={() => handleSort('title')} style={{ padding: '1rem', textAlign: 'left', fontWeight: 600, fontSize: '0.9rem', borderBottom: '2px solid rgba(255, 255, 255, 0.2)', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                        📝 Description {sortConfig.key === 'title' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 600, fontSize: '0.9rem', borderBottom: '2px solid rgba(255, 255, 255, 0.2)', whiteSpace: 'nowrap' }}>
+                        🏷️ Tag
+                      </th>
+                      <th onClick={() => handleSort('amount')} style={{ padding: '1rem', textAlign: 'left', fontWeight: 600, fontSize: '0.9rem', borderBottom: '2px solid rgba(255, 255, 255, 0.2)', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                        💰 Amount {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 600, fontSize: '0.9rem', borderBottom: '2px solid rgba(255, 255, 255, 0.2)', whiteSpace: 'nowrap' }}>
+                        📊 Status
+                      </th>
+                      <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 600, fontSize: '0.9rem', borderBottom: '2px solid rgba(255, 255, 255, 0.2)', whiteSpace: 'nowrap', width: '120px' }}>
+                        ⚙️ Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortItems(filteredItems.filter(i => i.type === 'expense')).map((item, index) => (
+                      <tr key={item.id} style={{
+                        borderBottom: '1px solid var(--border-color)',
+                        background: index % 2 === 0 ? 'rgba(99, 102, 241, 0.03)' : 'transparent',
+                        transition: 'all 0.2s ease'
+                      }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)';
+                          e.currentTarget.style.transform = 'scale(1.005)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(99, 102, 241, 0.03)' : 'transparent';
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }}>
+                        {isSelectionMode && (
+                          <td style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(item.id)}
+                              onChange={() => toggleSelection(item.id)}
+                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                            />
+                          </td>
+                        )}
+                        <td style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                          {new Date(item.created_at).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </td>
+                        <td
+                          style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', cursor: 'pointer', position: 'relative' }}
+                          onDoubleClick={() => setEditingCell({ id: item.id, field: 'title' })}
+                          title="Double-click to edit"
+                        >
+                          {editingCell?.id === item.id && editingCell?.field === 'title' ? (
+                            <input
+                              type="text"
+                              defaultValue={item.title}
+                              autoFocus
+                              onBlur={(e) => updateExpenseField(item.id, 'title', e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updateExpenseField(item.id, 'title', e.target.value);
+                                } else if (e.key === 'Escape') {
+                                  setEditingCell(null);
+                                }
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '0.5rem',
+                                border: '2px solid var(--accent-primary)',
+                                borderRadius: '4px',
+                                background: 'var(--bg-color)',
+                                color: 'var(--text-primary)'
+                              }}
+                            />
+                          ) : (
+                            item.title || 'Untitled'
+                          )}
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                          {item.metadata?.user_tag ? (
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '0.25rem 0.625rem',
+                              background: 'rgba(99, 102, 241, 0.1)',
+                              border: '1px solid rgba(99, 102, 241, 0.3)',
+                              borderRadius: '8px',
+                              color: 'var(--accent-primary)',
+                              fontSize: '0.8rem',
+                              fontWeight: 600
+                            }}>
+                              {item.metadata.user_tag}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>-</span>
+                          )}
+                        </td>
+                        <td
+                          style={{
+                            padding: '0.875rem 1rem',
+                            borderBottom: '1px solid var(--border-color)',
+                            fontSize: '0.9rem',
+                            fontWeight: 700,
+                            fontFamily: "'Courier New', monospace",
+                            textAlign: 'right',
+                            whiteSpace: 'nowrap',
+                            color: item.is_income ? '#10b981' : '#ef4444',
+                            cursor: 'pointer',
+                            position: 'relative'
+                          }}
+                          onDoubleClick={() => setEditingCell({ id: item.id, field: 'amount' })}
+                          title="Double-click to edit"
+                        >
+                          {editingCell?.id === item.id && editingCell?.field === 'amount' ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              defaultValue={item.amount}
+                              autoFocus
+                              onBlur={(e) => updateExpenseField(item.id, 'amount', e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updateExpenseField(item.id, 'amount', e.target.value);
+                                } else if (e.key === 'Escape') {
+                                  setEditingCell(null);
+                                }
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '0.5rem',
+                                border: '2px solid var(--accent-primary)',
+                                borderRadius: '4px',
+                                background: 'var(--bg-color)',
+                                color: 'var(--text-primary)'
+                              }}
+                            />
+                          ) : (
+                            <>
+                              {item.is_income ? '+' : '-'}₹{Math.abs(parseFloat(item.amount) || 0).toFixed(2)}
+                            </>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '0.375rem 0.75rem',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            background: item.expense_status === 'billed' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(251, 191, 36, 0.15)',
+                            color: item.expense_status === 'billed' ? '#10b981' : '#fbbf24',
+                            border: item.expense_status === 'billed' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(251, 191, 36, 0.3)'
+                          }}>
+                            {item.expense_status === 'billed' ? '✅ Billed' : '⏳ Pending'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.875rem 1rem', borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                            <button
+                              onClick={() => handleEdit(item)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '1.1rem',
+                                padding: '0.375rem',
+                                borderRadius: '6px',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                e.currentTarget.style.transform = 'scale(1.1)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'none';
+                                e.currentTarget.style.transform = 'scale(1)';
+                              }}
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => deleteItem(item.id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '1.1rem',
+                                padding: '0.375rem',
+                                borderRadius: '6px',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                e.currentTarget.style.transform = 'scale(1.1)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'none';
+                                e.currentTarget.style.transform = 'scale(1)';
+                              }}
+                              title="Delete"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot style={{
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    borderTop: '2px solid var(--accent-primary)',
+                    fontWeight: 700
+                  }}>
+                    <tr>
+                      <td colSpan={isSelectionMode ? 4 : 3} style={{
+                        padding: '1.25rem 1rem',
+                        fontSize: '1.1rem',
+                        borderBottom: 'none',
+                        textAlign: 'right',
+                        paddingRight: '1rem'
+                      }}>
+                        <strong>TOTAL:</strong>
+                      </td>
+                      <td style={{
+                        padding: '1.25rem 1rem',
+                        fontSize: '1.3rem',
+                        borderBottom: 'none',
+                        color: 'var(--accent-primary)',
+                        textAlign: 'right',
+                        fontWeight: 700
+                      }}>
+                        <strong>
+                          ₹{filteredItems
+                            .filter(i => i.type === 'expense')
+                            .reduce((sum, i) => {
+                              const amount = parseFloat(i.amount) || 0;
+                              return sum + (i.is_income ? amount : -amount);
+                            }, 0)
+                            .toFixed(2)}
+                        </strong>
+                      </td>
+                      <td colSpan="2" style={{ borderBottom: 'none' }}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* ORIGINAL CARD VIEW FOR NON-EXPENSE ITEMS */
+            <div className="video-grid" style={{ alignItems: "start" }}>
+              {filteredItems.map((item) => (
                 <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleSelection(item.id);
-                  }}
-                  style={{
-                    position: "absolute",
-                    top: "10px",
-                    left: "10px",
-                    zIndex: 20,
-                    width: "24px",
-                    height: "24px",
-                    borderRadius: "6px",
-                    background: selectedIds.has(item.id) ? "#10b981" : "rgba(255,255,255,0.2)",
-                    border: "2px solid white",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 2px 5px rgba(0,0,0,0.3)"
-                  }}
+                  key={item.id}
+                  className={`video-card ${item.type === "note" ? "note-card" : ""}`}
+                  style={item.type === "secret" ? { border: "1px solid #ef4444" } : {}}
                 >
-                  {selectedIds.has(item.id) && <span style={{ color: "white", fontSize: "16px", fontWeight: "bold" }}>✓</span>}
-                </div>
-              )}
-
-              {/* CONTENT RENDERING */}
-              {["video", "photo", "pdf"].includes(item.type) && (
-                <div
-                  className="video-thumbnail"
-                  style={{
-                    position: "relative",
-                    aspectRatio: "16/9",
-                    width: "100%",
-                    overflow: "hidden"
-                  }}
-                >
-                  {item.image_url ? (
-                    <img
-                      src={item.image_url}
-                      alt=""
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        if (e.target.nextSibling)
-                          e.target.nextSibling.style.display = "flex";
-                      }}
-                    />
-                  ) : null}
-
-                  {!item.image_url &&
-                    item.type === "video" &&
-                    getThumbnail(item.url) && (
-                      <img src={getThumbnail(item.url)} alt="" />
-                    )}
-
-                  {/* DISPLAY PHOTO (Only if no image_url, or if it's a captured photo with url) */}
-                  {item.type === "photo" && !item.image_url && item.url && (
-                    <img
-                      src={item.url}
-                      alt="Photo"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  )}
-
-                  {/* DISPLAY PDF */}
-                  {item.type === "pdf" && (
+                  {/* SELECTION CHECKBOX OVERLAY */}
+                  {isSelectionMode && item.type === 'expense' && (
                     <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelection(item.id);
+                      }}
                       style={{
-                        width: "100%",
-                        height: "100%",
-                        background: "#e11d48",
+                        position: "absolute",
+                        top: "10px",
+                        left: "10px",
+                        zIndex: 20,
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "6px",
+                        background: selectedIds.has(item.id) ? "#10b981" : "rgba(255,255,255,0.2)",
+                        border: "2px solid white",
+                        cursor: "pointer",
                         display: "flex",
-                        flexDirection: "column",
                         alignItems: "center",
                         justifyContent: "center",
-                        color: "white",
+                        boxShadow: "0 2px 5px rgba(0,0,0,0.3)"
                       }}
                     >
-                      <span style={{ fontSize: "3rem" }}>📄</span>
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      {selectedIds.has(item.id) && <span style={{ color: "white", fontSize: "16px", fontWeight: "bold" }}>✓</span>}
+                    </div>
+                  )}
+
+                  {/* CONTENT RENDERING */}
+                  {["video", "photo", "pdf"].includes(item.type) && (
+                    <div
+                      className="video-thumbnail"
+                      style={{
+                        position: "relative",
+                        aspectRatio: "16/9",
+                        width: "100%",
+                        overflow: "hidden"
+                      }}
+                    >
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            if (e.target.nextSibling)
+                              e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+
+                      {!item.image_url &&
+                        item.type === "video" &&
+                        getThumbnail(item.url) && (
+                          <img src={getThumbnail(item.url)} alt="" />
+                        )}
+
+                      {/* DISPLAY PHOTO */}
+                      {item.type === "photo" && !item.image_url && item.url && (
+                        <img
+                          src={item.url}
+                          alt="Photo"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      )}
+
+                      {/* DISPLAY PDF */}
+                      {item.type === "pdf" && (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            background: "#e11d48",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "white",
+                          }}
+                        >
+                          <span style={{ fontSize: "3rem" }}>📄</span>
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: "white",
+                              marginTop: "1rem",
+                              textDecoration: "underline",
+                              fontWeight: "bold",
+                              pointerEvents: "auto",
+                              zIndex: 10,
+                            }}
+                          >
+                            Download / View PDF
+                          </a>
+                        </div>
+                      )}
+
+                      {/* DISPLAY RECORDED VIDEO */}
+                      {item.type === "video" &&
+                        !item.image_url &&
+                        !getThumbnail(item.url) &&
+                        !item.url.includes("instagram") && (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "auto",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <video
+                              src={item.url}
+                              controls
+                              style={{ width: "100%", maxHeight: "450px" }}
+                            />
+                          </div>
+                        )}
+
+                      <div
+                        className="insta-fallback"
                         style={{
+                          display:
+                            !item.image_url &&
+                              item.url &&
+                              item.url.includes("instagram.com")
+                              ? "flex"
+                              : "none",
+                          width: "100%",
+                          height: "100%",
+                          position: item.image_url ? "absolute" : "relative",
+                          top: 0,
+                          left: 0,
+                          background:
+                            "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
                           color: "white",
-                          marginTop: "1rem",
-                          textDecoration: "underline",
-                          fontWeight: "bold",
-                          pointerEvents: "auto",
-                          zIndex: 10,
                         }}
                       >
-                        Download / View PDF
+                        <span
+                          style={{
+                            fontSize: "3rem",
+                            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
+                          }}
+                        >
+                          📸
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "1rem",
+                            fontWeight: "600",
+                            marginTop: "0.5rem",
+                            textShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                          }}
+                        >
+                          View Reel
+                        </span>
+                      </div>
+
+                      {!item.image_url &&
+                        !getThumbnail(item.url) &&
+                        !item.url?.includes("instagram.com") &&
+                        item.type !== "pdf" &&
+                        item.type !== "photo" &&
+                        item.type !== "video" && (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              minHeight: "180px",
+                              background: "#333",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            📝
+                          </div>
+                        )}
+
+                      <a href={item.url} target="_blank" className="play-overlay">
+                        ▶
                       </a>
                     </div>
                   )}
 
-                  {/* DISPLAY RECORDED VIDEO (no thumbnail) */}
-                  {item.type === "video" &&
-                    !item.image_url &&
-                    !getThumbnail(item.url) &&
-                    !item.url.includes("instagram") && (
+                  <div className="video-info" style={{ flex: "none" }}>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--text-secondary)",
+                        opacity: 0.7,
+                      }}
+                    >
+                      📅{" "}
+                      {new Date(item.created_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </div>
+
+                    <h3 className="video-title">
+                      {item.type === "secret"
+                        ? "🔒 " + item.title.replace("🔒 ", "")
+                        : item.title || "Untitled"}
+                    </h3>
+
+                    {item.type === "expense" && (
                       <div
                         style={{
-                          width: "100%",
-                          height: "auto",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
+                          marginTop: "0.5rem",
+                          fontWeight: 700,
+                          color: item.is_income ? "#10b981" : "#ef4444",
                         }}
                       >
-                        <video
-                          src={item.url}
-                          controls
-                          style={{ width: "100%", maxHeight: "450px" }}
-                        />
+                        {item.is_income ? "Income" : "Expense"}:{" "}
+                        {(parseFloat(item.amount) || 0) >= 0
+                          ? item.is_income
+                            ? "+"
+                            : "-"
+                          : ""}
+                        ₹{Math.abs(parseFloat(item.amount) || 0).toFixed(2)}
                       </div>
                     )}
 
-                  <div
-                    className="insta-fallback"
-                    style={{
-                      display:
-                        !item.image_url &&
-                          item.url &&
-                          item.url.includes("instagram.com")
-                          ? "flex"
-                          : "none",
-                      width: "100%",
-                      height: "100%",
-                      position: item.image_url ? "absolute" : "relative",
-                      top: 0,
-                      left: 0,
-                      background:
-                        "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "3rem",
-                        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
-                      }}
-                    >
-                      📸
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        marginTop: "0.5rem",
-                        textShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                      }}
-                    >
-                      View Reel
-                    </span>
-                  </div>
-
-                  {!item.image_url &&
-                    !getThumbnail(item.url) &&
-                    !item.url?.includes("instagram.com") &&
-                    item.type !== "pdf" &&
-                    item.type !== "photo" &&
-                    item.type !== "video" && (
+                    {/* SECURE CONTENT VIEWER */}
+                    {item.type === "secret" && isSecretsUnlocked ? (
+                      <DecryptedNote item={item} password={masterPassword} />
+                    ) : item.type === "secret" ? (
                       <div
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          minHeight: "180px",
-                          background: "#333",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
+                          padding: "1rem",
+                          background: "#222",
+                          borderRadius: "4px",
+                          marginTop: "0.5rem",
+                          color: "#666",
+                          fontStyle: "italic",
                         }}
                       >
-                        📝
+                        *** Encrypted Content ***
+                      </div>
+                    ) : (
+                      <p
+                        style={{
+                          marginTop: "0.5rem",
+                          fontSize: "0.9rem",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        {item.notes}
+                      </p>
+                    )}
+
+                    {/* Tag Display */}
+                    {item.metadata?.user_tag && (
+                      <div
+                        className="video-tag"
+                        style={{
+                          display: "inline-block",
+                          marginTop: "0.5rem",
+                          marginBottom: "0.25rem",
+                          padding: "4px 10px",
+                          borderRadius: "6px",
+                          background: "rgba(99, 102, 241, 0.1)",
+                          border: "1px solid rgba(99, 102, 241, 0.3)",
+                          color: "var(--accent-primary)",
+                          fontSize: "0.8rem",
+                          fontWeight: "700",
+                        }}
+                      >
+                        📌 {item.metadata.user_tag}
                       </div>
                     )}
 
-                  <a href={item.url} target="_blank" className="play-overlay">
-                    ▶
-                  </a>
-                </div>
-              )}
-
-              <div className="video-info" style={{ flex: "none" }}>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "var(--text-secondary)",
-                    opacity: 0.7,
-                  }}
-                >
-                  📅{" "}
-                  {new Date(item.created_at).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </div>
-
-                <h3 className="video-title">
-                  {item.type === "secret"
-                    ? "🔒 " + item.title.replace("🔒 ", "")
-                    : item.title || "Untitled"}
-                </h3>
-
-                {item.type === "expense" && (
-                  <div
-                    style={{
-                      marginTop: "0.5rem",
-                      fontWeight: 700,
-                      color: item.is_income ? "#10b981" : "#ef4444",
-                    }}
-                  >
-                    {item.is_income ? "Income" : "Expense"}:{" "}
-                    {(parseFloat(item.amount) || 0) >= 0
-                      ? item.is_income
-                        ? "+"
-                        : "-"
-                      : ""}
-                    ₹{Math.abs(parseFloat(item.amount) || 0).toFixed(2)}
+                    <div className="video-actions">
+                      <button
+                        className="add-btn"
+                        onClick={() => handleEdit(item)}
+                        style={{
+                          padding: "4px 12px",
+                          fontSize: "0.8rem",
+                          marginRight: "auto",
+                          background: "transparent",
+                          border: "1px solid var(--border-color)",
+                          color: "var(--text-primary)",
+                        }}
+                      >
+                        🏷️ Edit / Append
+                      </button>
+                      <button
+                        className="icon-btn delete"
+                        type="button"
+                        style={{
+                          color: "#ef4444",
+                          border: "1px solid rgba(239,68,68,0.3)",
+                          background: "rgba(239,68,68,0.1)",
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          deleteItem(item.id);
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
-                )}
-
-                {/* SECURE CONTENT VIEWER */}
-                {item.type === "secret" && isSecretsUnlocked ? (
-                  <DecryptedNote item={item} password={masterPassword} />
-                ) : item.type === "secret" ? (
-                  <div
-                    style={{
-                      padding: "1rem",
-                      background: "#222",
-                      borderRadius: "4px",
-                      marginTop: "0.5rem",
-                      color: "#666",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    *** Encrypted Content ***
-                  </div>
-                ) : (
-                  <p
-                    style={{
-                      marginTop: "0.5rem",
-                      fontSize: "0.9rem",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    {item.notes}
-                  </p>
-                )}
-
-                {/* Tag Display ... */}
-                {item.metadata?.user_tag && (
-                  <div
-                    className="video-tag"
-                    style={{
-                      display: "inline-block",
-                      marginTop: "0.5rem",
-                      marginBottom: "0.25rem",
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      background: "rgba(99, 102, 241, 0.1)",
-                      border: "1px solid rgba(99, 102, 241, 0.3)",
-                      color: "var(--accent-primary)",
-                      fontSize: "0.8rem",
-                      fontWeight: "700",
-                    }}
-                  >
-                    📌 {item.metadata.user_tag}
-                  </div>
-                )}
-
-                <div className="video-actions">
-                  <button
-                    className="add-btn"
-                    onClick={() => handleEdit(item)}
-                    style={{
-                      padding: "4px 12px",
-                      fontSize: "0.8rem",
-                      marginRight: "auto",
-                      background: "transparent",
-                      border: "1px solid var(--border-color)",
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    🏷️ Edit / Append
-                  </button>
-                  <button
-                    className="icon-btn delete"
-                    type="button"
-                    style={{
-                      color: "#ef4444",
-                      border: "1px solid rgba(239,68,68,0.3)",
-                      background: "rgba(239,68,68,0.1)",
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      deleteItem(item.id);
-                    }}
-                  >
-                    🗑️
-                  </button>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )
       }
 
