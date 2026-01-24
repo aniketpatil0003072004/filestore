@@ -124,6 +124,11 @@ function App() {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // TABLE VIEW STATE (for Excel-like expense display)
+  const [isTableView, setIsTableView] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
+  const [editingCell, setEditingCell] = useState(null);
+
   const toggleSelection = (id) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) {
@@ -1004,6 +1009,76 @@ function App() {
       setIsSelectionMode(false);
       setSelectedIds(new Set());
     }
+  };
+
+  // TABLE VIEW HELPER FUNCTIONS
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const sortItems = (itemsToSort) => {
+    return [...itemsToSort].sort((a, b) => {
+      let aVal, bVal;
+
+      if (sortConfig.key === 'amount') {
+        aVal = parseFloat(a.amount) || 0;
+        bVal = parseFloat(b.amount) || 0;
+      } else if (sortConfig.key === 'created_at') {
+        aVal = new Date(a.created_at).getTime();
+        bVal = new Date(b.created_at).getTime();
+      } else {
+        aVal = (a[sortConfig.key] || '').toString().toLowerCase();
+        bVal = (b[sortConfig.key] || '').toString().toLowerCase();
+      }
+
+      if (sortConfig.direction === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+  };
+
+  const updateExpenseField = async (itemId, field, value) => {
+    try {
+      const updateData = field === 'amount'
+        ? { amount: parseFloat(value) || 0 }
+        : { [field]: value };
+
+      const { error } = await supabase
+        .from('items')
+        .update(updateData)
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      await fetchItems();
+      setEditingCell(null);
+
+      setToastEmoji("✅");
+      setToastMessage("Updated successfully!");
+      setShowToast(true);
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      setToastEmoji("❌");
+      setToastMessage("Update failed");
+      setShowToast(true);
+    }
+  };
+
+  const calculateExpenseStats = (expenseItems) => {
+    const expenses = expenseItems.filter(i => !i.is_income);
+    const income = expenseItems.filter(i => i.is_income);
+
+    const totalExpenses = expenses.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    const totalIncome = income.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+    const netBalance = totalIncome - totalExpenses;
+    const pendingCount = expenseItems.filter(i => i.expense_status === 'pending' || !i.expense_status).length;
+
+    return { totalExpenses, totalIncome, netBalance, pendingCount };
   };
 
   const filteredItems = activeTag
