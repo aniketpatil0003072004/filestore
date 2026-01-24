@@ -1093,7 +1093,7 @@ function App() {
     : activeCategory === "🔒 Security"
       ? items.filter((i) => i.type === "secret")
       : activeCategory === "All"
-        ? items.filter((i) => i.type !== "secret")
+        ? items.filter((i) => i.type !== "secret" && i.type !== "expense")
         : items.filter((i) => i.category === activeCategory && i.type !== "secret");
 
   if (!sessionToken)
@@ -1221,11 +1221,6 @@ function App() {
       <header className="header">
         <div className="header-content-left">
           <h1 className="title">Vaultify</h1>
-          <div className="wallet-pill">
-            <span style={{ color: walletBalance < 0 ? "#ef4444" : "#10b981" }}>
-              💳 {walletBalance.toFixed(2)}
-            </span>
-          </div>
         </div>
 
         <div className="header-content-right">
@@ -1628,25 +1623,6 @@ function App() {
                     gap: '1rem',
                     marginBottom: '2rem'
                   }}>
-                    {/* Wallet Balance Card */}
-                    <div className="stat-card" style={{
-                      background: 'var(--glass-bg)',
-                      backdropFilter: 'blur(20px)',
-                      border: '1px solid var(--glass-border)',
-                      borderRadius: '16px',
-                      padding: '1.5rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.5rem'
-                    }}>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                        💳 Wallet Balance
-                      </span>
-                      <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#8b5cf6' }}>
-                        ₹{walletBalance.toFixed(2)}
-                      </span>
-                    </div>
-
                     {/* Total Income Card */}
                     <div className="stat-card" style={{
                       background: 'var(--glass-bg)',
@@ -1682,32 +1658,6 @@ function App() {
                       </span>
                       <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#ef4444' }}>
                         -₹{stats.totalExpenses.toFixed(2)}
-                      </span>
-                    </div>
-
-                    {/* Net Balance Card - Shows Wallet + Income - Expenses */}
-                    <div className="stat-card" style={{
-                      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1))',
-                      backdropFilter: 'blur(20px)',
-                      border: '2px solid var(--accent-primary)',
-                      borderRadius: '16px',
-                      padding: '1.5rem',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.5rem'
-                    }}>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                        💰 Net Balance
-                      </span>
-                      <span style={{
-                        fontSize: '1.5rem',
-                        fontWeight: 700,
-                        color: stats.netBalance >= 0 ? '#10b981' : '#ef4444'
-                      }}>
-                        ₹{stats.netBalance.toFixed(2)}
-                      </span>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                        Wallet {walletBalance >= 0 ? '+' : ''} Income - Expenses
                       </span>
                     </div>
 
